@@ -1,0 +1,40 @@
+#!/bin/bash
+#SBATCH -A pccr
+#SBATCH -t 336:00:00
+#SBATCH -N 1
+#SBATCH -n 32
+#SBATCH --job-name=Nai2_1
+#SBATCH --mail-type=FAIL,BEGIN,END
+#SBATCH --mail-user=natallah@purdue.edu
+#SBATCH --error=%x-%J-%u.err
+#SBATCH --output=%x-%J-%u.out
+
+starts=$(date +"%s")
+start=$(date +"%r, %m-%d-%Y")
+
+module --force purge
+module load bioinfo
+module load cellranger
+
+cd /depot/tlratlif/data/LSC_scRNAseq_2023/1_CellRanger/output
+
+cellranger count --id=Nai2_1 \
+--transcriptome=/depot/tlratlif/data/LSC_scRNAseq_2023/1_CellRanger/reference/refdata-gex-mm10-2020-A \
+--fastqs=/depot/tlratlif/data/LSC_scRNAseq_2023/1_CellRanger/input/Nai_2_1 \
+--sample=Nai2_1 \
+--localcores 32  \
+--expect-cells=10000
+
+
+ends=$(date +"%s")
+end=$(date +"%r, %m-%d-%Y")
+diff=$(($ends-$starts))
+hours=$(($diff / 3600))
+dif=$(($diff % 3600))
+minutes=$(($dif / 60))
+seconds=$(($dif % 60))
+printf "\n\t===========Time Stamp===========\n"
+printf "\tStart\t:$start\n\tEnd\t:$end\n\tTime\t:%02d:%02d:%02d\n" "$hours" "$minutes" "$seconds"
+printf "\t================================\n\n"
+
+sacct --jobs=$SLURM_JOBID --format=jobid,jobname,qos,nnodes,ncpu,maxrss,cputime,avecpu,elapsed
