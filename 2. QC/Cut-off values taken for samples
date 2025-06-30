@@ -1,0 +1,139 @@
+Samples	  upper_cutoff	lower_cutoff	MT_cutoff(%)	Ribo_cutoff(%)   Filterd_cell_count   Cell_count-before_QC  
+Inf-1.1		6000	    200		15			40	3284			4245                
+Inf-2.1	    	6000	    200		15			40	10742			11,186
+Inf-2.2    	6000	    200		15			40	11044			11,509
+Inf-3.1		6000	    200		15			40	830			1,046
+Inf-3.2		6000	    200		15			40	1013			1,197
+Naiv-1.1        6000	    200		15			40	4015                    4,803
+Naiv-1.2        6000	    200		15			40	18193			18,474
+Naiv-2.1	6000	    200		15			40	8268			8,368
+Naiv-2.2	6000	    200		15			40	8273			8,331
+Naiv-3.1	6000	    200		15			40	199			209
+Naiv-3.2	6000	    200		15			40	895			919
+                                                                        -----------------------------------
+                                                                 Total: 66756                   70287                                                          
+                                                    Sample wise count : 26913 (Inf)             29183 (Inf)
+                                                                        39843 (Naiv)            41104 (Naiv)    
+                                                                        
+                                                                                                         
+###############################################################################Cell counts before and after filtering at various mt cutoffs############################################################# 
+
+At upper=6000, lower=200, mt=15 and Ribo_cutoff =40 or 50
+
+Inf-1.1
+
+	Original Cell Count 	Filtered Cell Count
+MT cutoff 10% 	4201 	3238
+MT cutoff 15% 	4201 	3284
+MT cutoff 20% 	4201 	3308
+MT cutoff 25% 	4201 	3321 
+
+
+Inf-2.1
+
+ 	Original Cell Count 	Filtered Cell Count
+MT cutoff 10% 	10988 	10646
+MT cutoff 15% 	10988 	10742
+MT cutoff 20% 	10988 	10800
+MT cutoff 25% 	10988 	10827 
+
+
+
+Inf-2.2
+
+	Original Cell Count 	Filtered Cell Count
+MT cutoff 10% 	11328 	10934
+MT cutoff 15% 	11328 	11044
+MT cutoff 20% 	11328 	11110
+MT cutoff 25% 	11328 	11145
+
+
+Inf-3.1
+
+
+	Original Cell Count 	Filtered Cell Count
+MT cutoff 10% 	1004 	821
+MT cutoff 15% 	1004 	830
+MT cutoff 20% 	1004 	836
+MT cutoff 25% 	1004 	838 
+
+
+
+Inf-3.2 
+
+ 	Original Cell Count 	Filtered Cell Count
+MT cutoff 10% 	1168 	1000
+MT cutoff 15% 	1168 	1013
+MT cutoff 20% 	1168 	1017
+MT cutoff 25% 	1168 	1022 
+
+
+Naiv-1.1
+
+Original Cell Count 	Filtered Cell Count
+MT cutoff 10% 	4746 	3970
+MT cutoff 15% 	4746 	4015
+MT cutoff 20% 	4746 	4037
+MT cutoff 25% 	4746 	4060 
+
+
+
+
+
+Naiv-1.2
+
+ 	Original Cell Count 	Filtered Cell Count
+MT cutoff 10% 	18459 	17839
+MT cutoff 15% 	18459 	18193
+MT cutoff 20% 	18459 	18280
+MT cutoff 25% 	18459 	18330 
+
+
+
+
+
+Naiv-2.1
+
+ 	Original Cell Count 	Filtered Cell Count
+MT cutoff 10% 	8332 	8213
+MT cutoff 15% 	8332 	8268
+MT cutoff 20% 	8332 	8293
+MT cutoff 25% 	8332 	8303 
+
+
+
+
+
+Naiv-2.2
+
+ 	Original Cell Count 	Filtered Cell Count
+MT cutoff 10% 	8314 	8228
+MT cutoff 15% 	8314 	8273
+MT cutoff 20% 	8314 	8286
+MT cutoff 25% 	8314 	8288 
+
+
+ 
+
+
+
+Naiv-3.1
+ 	Original Cell Count 	Filtered Cell Count
+MT cutoff 10% 	205 	198
+MT cutoff 15% 	205 	199
+MT cutoff 20% 	205 	199
+MT cutoff 25% 	205 	199 
+
+
+
+Naiv-3.2
+
+ 	Original Cell Count 	Filtered Cell Count
+MT cutoff 10% 	911 	892
+MT cutoff 15% 	911 	895
+MT cutoff 20% 	911 	898
+MT cutoff 25% 	911 	900 
+
+
+
+

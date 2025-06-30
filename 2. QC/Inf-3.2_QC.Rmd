@@ -1,0 +1,148 @@
+---
+title: "Inf-3.2-QC"
+author: "Nikhila"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+
+```{r library, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval=TRUE}
+
+library(Seurat)
+library(Seurat)
+library(dplyr)
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+library(ggthemes)
+library(ggplot2)
+library(cowplot)
+library(data.table)
+library(dplyr)
+library(RColorBrewer)
+
+
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/QC")
+
+```
+
+
+
+```{r data, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval=TRUE}
+
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/QC")
+
+sample <- Read10X(data.dir = "/depot/tlratlif/data/LSC_scRNAseq_2023/1_CellRanger/output/Inf3_2/outs/filtered_feature_bc_matrix")
+
+name = "Inf-3.2"
+
+```
+
+
+
+```{r import_to_Seurat, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval=TRUE}
+
+sample <- CreateSeuratObject(counts = sample, project = "Inf-3.2", min.cells = 3, min.features = 200)
+
+sample[["percent.mt"]] = PercentageFeatureSet(sample, pattern = "^mt-")
+sample[["percent.ribo"]] = PercentageFeatureSet(sample, pattern="Rp[sl][[:digit:]]")
+
+outfile = paste0(name,"_base.rds")
+
+saveRDS(sample, file = outfile)
+
+```
+
+## Sample QC
+Seurat allows to easily explore QC metrics and filter cells based on various quality criteria. A few commonly used QC metrics are given below:
+
+1. Transcript (nCount) and gene (nFeature) abundance
+	- Low-quality cells or empty droplets will often have very few genes/transcripts
+	- Cell doublets or multiplets may exhibit an aberrantly high gene count
+2. The percentage of reads that map to the mitochondrial genome
+	- Low-quality / dying cells often exhibit extensive mitochondrial contamination
+	- Mitochondrial QC metrics is calculated as percentage of counts originating from a set of mitochondrial genes (i.e. all genes starting with MT)
+3. Ribosomal contents
+	- Less than 50% ribosomal content is often preferred
+
+Below is the visualization of QC matrices:
+
+```{r show_plots1, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval=TRUE, fig.width=8, fig.height=6}
+
+VlnPlot(sample, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3, pt.size = 0)
+
+VlnPlot(sample, features = c('percent.mt','percent.ribo'), pt.size = 0)
+
+
+```
+
+
+### To identify dead cells/debris and doublets, mitochondrial contents and transcript abundance are plotted together
+
+```{r show_plots2, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, results = "hide", eval=TRUE, fig.width=8, fig.height=4}
+
+FeatureScatter(object=sample, feature1='percent.mt', feature2='nCount_RNA', pt.size = 0.1, plot.cor = F)
+
+```
+
+
+
+```{r filter, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, results = "hide", eval=TRUE, fig.width=8, fig.height=4}
+
+ori_cell_count = dim(sample@assays$RNA)[2]
+
+mylist = list()
+mt_cutoff = c(10, 15, 20, 25)
+temp_table = data.frame()
+
+for (i in mt_cutoff) {
+  
+  x <- subset(sample, subset = nFeature_RNA > 200 & nFeature_RNA < 6000 & percent.mt < i)
+  cell_count = dim(x@assays$RNA)[2]
+  myvec = c(ori_cell_count, cell_count)
+  print(myvec)
+  temp_table = rbind(temp_table, myvec)
+  
+}
+
+colnames(temp_table) = c("Original Cell Count", "Filtered Cell Count")
+rownames(temp_table) = c("MT cutoff 10%", "MT cutoff 15%", "MT cutoff 20%", "MT cutoff 25%")
+
+```
+
+
+
+### Cell counts before and after filtering
+
+```{r show_table, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval=TRUE}
+
+temp_table %>%
+  kable(align = "c") %>%
+  kable_styling(c("striped", "bordered"), full_width = T, fixed_thead = T) %>%
+  row_spec(0, bold = T, color = "white", background = "#0571b0") %>%
+  scroll_box(height = "250px", width = "450px")
+
+```
+
+
+```{r filter_cutoff_and_save, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval=TRUE}
+
+
+# After testing various cutoffs (table above) - we decided to use following filtering parameters
+upper_cutoff = 6000
+lower_cutoff = 200
+MT_cutoff    = 15  
+ribo_cutoff = 40
+
+infile = paste0(name,"_base.rds")
+
+sample = readRDS(file = infile)
+
+sample <- subset(sample, subset = nFeature_RNA > lower_cutoff & nFeature_RNA < upper_cutoff & percent.mt < MT_cutoff & percent.ribo < ribo_cutoff)
+
+outfile = paste0(name,"_QC.rds")
+saveRDS(sample, file = outfile)
+
+```
+
+
