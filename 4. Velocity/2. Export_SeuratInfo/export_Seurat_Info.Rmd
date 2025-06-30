@@ -1,0 +1,316 @@
+---
+title: "Export SeuratInfo"
+author: "Nikhila T. Suresh"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r library, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, results="hide", eval=TRUE}
+
+library(Seurat)
+library(Seurat)
+library(Matrix)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(scales)
+
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/3_velocity/2_export_SeuratInfo")
+
+
+```
+
+
+```{r test_gr1, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, results="hide", eval=FALSE}
+
+
+name="Lsc"
+# Third clustering object after excluding C9 in second clustering
+gr1 <- readRDS("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9/clustering-r5-pc21_SCT.rds")
+DefaultAssay(gr1) <- "RNA"
+identities.gr1 <- levels(gr1)
+#"0" "1" "2" "3" "4" "5" "6" "7" "8" "9"
+
+my_color_palette.gr1 <- hue_pal()(length(identities.gr1))
+write.csv(my_color_palette.gr1,"grl.colors.csv")
+
+
+#you will use these to match with your individual sample loom files later (if you are working with integrated data)
+gr1$cluster.type <-paste(Idents(gr1),gr1$orig.ident,sep="_")
+
+
+#rename the cells
+unique(gr1@meta.data$orig.ident)
+
+#[1]"Naiv-1.1" "Naiv-1.2" "Naiv-2.1" "Naiv-2.2" "Naiv-3.1" "Naiv-3.2" "Inf-1.1"  "Inf-2.1"  "Inf-2.2"  "Inf-3.1"  "Inf-3.2"
+# "S6" "S7" "S8" "T6" "T7" "T8"
+
+gr1$barcode <- colnames(gr1)
+head(gr1$barcode)
+
+
+#S6_AAACCCAAGATACATG-1   S6_AAACCCACAATAACCC-1   S6_AAACCCAGTGATTAGA-1 
+#"S6_AAACCCAAGATACATG-1" "S6_AAACCCACAATAACCC-1" "S6_AAACCCAGTGATTAGA-1" 
+#S6_AAACGAAAGCCGAATG-1   S6_AAACGAAAGGTCATCT-1   S6_AAACGAAGTCAGGAGT-1 
+#"S6_AAACGAAAGCCGAATG-1" "S6_AAACGAAAGGTCATCT-1" "S6_AAACGAAGTCAGGAGT-1" 
+
+
+#t2_t1_Naiv-1.1_AAACCCACATCTAACG-1_1   t2_t1_Naiv-1.1_AAACCCAGTGGAAGTC-1_1 
+#"t2_t1_Naiv-1.1_AAACCCACATCTAACG-1_1" "t2_t1_Naiv-1.1_AAACCCAGTGGAAGTC-1_1" 
+#  t2_t1_Naiv-1.1_AAACCCATCGCCTTGT-1_1   t2_t1_Naiv-1.1_AAACGAAAGCGTGAAC-1_1 
+#"t2_t1_Naiv-1.1_AAACCCATCGCCTTGT-1_1" "t2_t1_Naiv-1.1_AAACGAAAGCGTGAAC-1_1" 
+#  t2_t1_Naiv-1.1_AAACGAAAGGTAAAGG-1_1   t2_t1_Naiv-1.1_AAACGAACACACGTGC-1_1 
+#"t2_t1_Naiv-1.1_AAACGAAAGGTAAAGG-1_1" "t2_t1_Naiv-1.1_AAACGAACACACGTGC-1_1" 
+
+
+#get embeddings
+gr1$UMAP_1 <- gr1@reductions$umap@cell.embeddings[,1]
+gr1$UMAP_2 <- gr1@reductions$umap@cell.embeddings[,2]
+gr1.meta <- gr1@meta.data
+
+
+bar.gr1.temp <- str_replace(gr1.meta$barcode,"t.+?_t.+?_","")
+
+#> head(bar.gr1.temp)
+#[1] "Naiv-1.1_AAACCCACATCTAACG-1_1" "Naiv-1.1_AAACCCAGTGGAAGTC-1_1" "Naiv-1.1_AAACCCATCGCCTTGT-1_1" "Naiv-1.1_AAACGAAAGCGTGAAC-1_1"
+#[5] "Naiv-1.1_AAACGAAAGGTAAAGG-1_1" "Naiv-1.1_AAACGAACACACGTGC-1_1"
+
+
+#> tail(bar.gr1.temp)
+#[1] "Inf-3.2_TTTCACAAGCAGATAT-1_11" "Inf-3.2_TTTCATGAGTTGTCGT-1_11" "Inf-3.2_TTTCCTCGTCTTCAAG-1_11" "Inf-3.2_TTTGGAGCAACTGTGT-1_11"
+#[5] "Inf-3.2_TTTGGAGGTTAAGACA-1_11" "Inf-3.2_TTTGTTGTCTTACTGT-1_11"
+
+
+#change the below for your specific barcode names
+unique(str_extract(gr1.meta$barcode,"-\\d+[_\\d+]*"))
+#[1] "-1"
+
+
+unique(str_extract(gr1.meta$barcode,"S\\d+_*|T\\d+_*"))
+#[1] "S6_" "S7_" "S8_" "T6_" "T7_" "T8_"
+bar.gr1.temp <- str_replace(gr1.meta$barcode,"-\\d+[_\\d+]*|_\\d+[_\\d+]*","")
+
+bar.gr1.temp <- str_replace(gr1.meta$barcode,"-\\d+[_\\d+]*|_\\d+[_\\d+]*|t.+?_t.+?_","")
+bar.gr1.temp <- str_replace(bar.gr1.temp,"^[^_]*_","")# till first underscore 
+
+bar.gr1.temp <- str_replace(bar.gr1.temp,"-\\d+[_\\d+]*|_\\d+[_\\d+]*","")
+#> head(bar.gr1.temp)
+#[1] "Naiv-1.1_AAACCCACATCTAACG-1_1" "Naiv-1.1_AAACCCAGTGGAAGTC-1_1" "Naiv-1.1_AAACCCATCGCCTTGT-1_1"
+#[4] "Naiv-1.1_AAACGAAAGCGTGAAC-1_1" "Naiv-1.1_AAACGAAAGGTAAAGG-1_1" "Naiv-1.1_AAACGAACACACGTGC-1_1"
+#> tail(bar.gr1.temp)
+#[1] "Inf.2_TTTCACAAGCAGATAT-1_11" "Inf.2_TTTCATGAGTTGTCGT-1_11" "Inf.2_TTTCCTCGTCTTCAAG-1_11" "Inf.2_TTTGGAGCAACTGTGT-1_11"
+#[5] "Inf.2_TTTGGAGGTTAAGACA-1_11" "Inf.2_TTTGTTGTCTTACTGT-1_11"
+
+
+
+
+head(bar.gr1.temp)
+#"S6_AAACCCAAGATACATG"
+
+
+bar.gr1.temp <- str_replace(gr1.meta$barcode,"_\\d+[_\\d+]","")
+head(bar.gr1.temp)
+
+bar.gr1.temp2 <- str_replace(bar.gr1.temp,"S\\d+_*|T\\d+_*","")
+bar.gr1.temp <- str_replace(bar.gr1.temp,"-\\d+[_\\d+]*|_\\d+[_\\d+]*","")
+head(bar.gr1.temp2)
+#"AAACCCAAGATACATG"
+
+bar.gr1.temp3 <- paste(bar.gr1.temp2,gr1.meta$orig.ident,sep="_")
+head(bar.gr1.temp3)
+#"AAACCCAAGATACATG_S6"
+
+gr1.meta$barcode <- bar.gr1.temp3
+
+
+```
+
+
+
+
+```{r my-sample, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, results="hide", eval=TRUE}
+
+
+
+
+
+name="Lsc"
+# load Seurat Object
+sample <- readRDS("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9/clustering-r5-pc21_SCT.rds")
+
+
+
+# object should have the RNA assay as the primary one
+DefaultAssay(sample) <- "RNA"
+
+
+
+
+#get hex codes of colors
+identities.sample <- levels(sample)
+my_color_palette.sample <- hue_pal()(length(identities.sample))
+
+outname = paste0(name, "_colors.csv")
+write.csv(my_color_palette.sample, outname)
+
+
+
+          
+#rename the cells
+unique(sample@meta.data$orig.ident)
+
+# [1] "Naiv-1.1" "Naiv-1.2" "Naiv-2.1" "Naiv-2.2" "Naiv-3.1" "Naiv-3.2" "Inf-1.1"  "Inf-2.1"  "Inf-2.2"  "Inf-3.1"  "Inf-3.2" 
+
+
+
+str_remove_all(colnames(sample), "[_Naiv3]")
+sample$barcode <- colnames(sample)
+head(sample$barcode)
+
+
+
+#> head(sample$barcode)
+#  t2_t1_Naiv-1.1_AAACCCACATCTAACG-1_1   t2_t1_Naiv-1.1_AAACCCAGTGGAAGTC-1_1   t2_t1_Naiv-1.1_AAACCCATCGCCTTGT-1_1 
+#"t2_t1_Naiv-1.1_AAACCCACATCTAACG-1_1" "t2_t1_Naiv-1.1_AAACCCAGTGGAAGTC-1_1" "t2_t1_Naiv-1.1_AAACCCATCGCCTTGT-1_1" 
+#  t2_t1_Naiv-1.1_AAACGAAAGCGTGAAC-1_1   t2_t1_Naiv-1.1_AAACGAAAGGTAAAGG-1_1   t2_t1_Naiv-1.1_AAACGAACACACGTGC-1_1 
+#"t2_t1_Naiv-1.1_AAACGAAAGCGTGAAC-1_1" "t2_t1_Naiv-1.1_AAACGAAAGGTAAAGG-1_1" "t2_t1_Naiv-1.1_AAACGAACACACGTGC-1_1" 
+
+
+#> tail(sample$barcode)
+ # Inf-3.2_TTTCACAAGCAGATAT-1_11   Inf-3.2_TTTCATGAGTTGTCGT-1_11   Inf-3.2_TTTCCTCGTCTTCAAG-1_11   Inf-3.2_TTTGGAGCAACTGTGT-1_11 
+#"Inf-3.2_TTTCACAAGCAGATAT-1_11" "Inf-3.2_TTTCATGAGTTGTCGT-1_11" "Inf-3.2_TTTCCTCGTCTTCAAG-1_11" "Inf-3.2_TTTGGAGCAACTGTGT-1_11" 
+#  Inf-3.2_TTTGGAGGTTAAGACA-1_11   Inf-3.2_TTTGTTGTCTTACTGT-1_11 
+#"Inf-3.2_TTTGGAGGTTAAGACA-1_11" "Inf-3.2_TTTGTTGTCTTACTGT-1_11" 
+
+#get embeddings
+sample$UMAP_1 <- sample@reductions$umap@cell.embeddings[,1]
+sample$UMAP_2 <- sample@reductions$umap@cell.embeddings[,2]
+sample.meta <- sample@meta.data
+
+#change the below for your specific barcode names
+#unique(str_extract(sample.meta$barcode,"-\\d+[_\\d+]*"))
+#[1] "-1"  "-2"  "-3_" "-3" 
+
+
+#bar.sample.temp <- str_replace(sample$barcode,"-\\d+[_\\d+]*|_\\d+[_\\d+]*","")
+bar.gr1.temp <- str_replace(sample$barcode,"t.+?_t.+?_","")
+
+#> head(bar.gr1.temp)
+#[1] "Naiv-1.1_AAACCCACATCTAACG-1_1" "Naiv-1.1_AAACCCAGTGGAAGTC-1_1" "Naiv-1.1_AAACCCATCGCCTTGT-1_1" "Naiv-1.1_AAACGAAAGCGTGAAC-1_1"
+#[5] "Naiv-1.1_AAACGAAAGGTAAAGG-1_1" "Naiv-1.1_AAACGAACACACGTGC-1_1"
+
+
+#> tail(bar.gr1.temp)
+#[1] "Inf-3.2_TTTCACAAGCAGATAT-1_11" "Inf-3.2_TTTCATGAGTTGTCGT-1_11" "Inf-3.2_TTTCCTCGTCTTCAAG-1_11" "Inf-3.2_TTTGGAGCAACTGTGT-1_11"
+#[5] "Inf-3.2_TTTGGAGGTTAAGACA-1_11" "Inf-3.2_TTTGTTGTCTTACTGT-1_11"
+
+
+bar.gr1.temp <- str_replace(bar.gr1.temp,"^[^_]*_","")# till first underscore 
+
+
+#> head(bar.gr1.temp)
+#[1] "AAACCCACATCTAACG-1_1" "AAACCCAGTGGAAGTC-1_1" "AAACCCATCGCCTTGT-1_1" "AAACGAAAGCGTGAAC-1_1" "AAACGAAAGGTAAAGG-1_1" "AAACGAACACACGTGC-1_1"
+#> tail(bar.gr1.temp)
+#[1] "TTTCACAAGCAGATAT-1_11" "TTTCATGAGTTGTCGT-1_11" "TTTCCTCGTCTTCAAG-1_11" "TTTGGAGCAACTGTGT-1_11" "TTTGGAGGTTAAGACA-1_11" "TTTGTTGTCTTACTGT-1_11"
+
+
+d11<-str_remove_all(bar.gr1.temp, "[_Naiv3]")
+bar.gr1.temp <- str_replace(d11,"^[-]","")
+
+
+bar.gr1.temp <- str_replace(bar.gr1.temp,"-\\d+[_\\d+]*|_\\d+[_\\d+]*","")#ending part
+#> tail(bar.gr1.temp)
+#[1] "TTTCACAAGCAGATAT" "TTTCATGAGTTGTCGT" "TTTCCTCGTCTTCAAG" "TTTGGAGCAACTGTGT" "TTTGGAGGTTAAGACA" "TTTGTTGTCTTACTGT"
+#> head(bar.gr1.temp)
+#[1] "AAACCCACATCTAACG" "AAACCCAGTGGAAGTC" "AAACCCATCGCCTTGT" "AAACGAAAGCGTGAAC" "AAACGAAAGGTAAAGG" "AAACGAACACACGTGC"
+
+
+
+bar.sample.temp3 <- paste(bar.gr1.temp,sample@meta.data$orig.ident,sep="_")
+#> head(bar.sample.temp3)
+#[1] "AAACCCACATCTAACG_Naiv-1.1" "AAACCCAGTGGAAGTC_Naiv-1.2" "AAACCCATCGCCTTGT_Naiv-2.1" "AAACGAAAGCGTGAAC_Naiv-2.2" "AAACGAAAGGTAAAGG_Naiv-3.1"
+#[6] "AAACGAACACACGTGC_Naiv-3.2"
+#> tail(bar.sample.temp3)
+#[1] "TTTCACAAGCAGATAT_Inf-2.2"  "TTTCATGAGTTGTCGT_Inf-3.1"  "TTTCCTCGTCTTCAAG_Inf-3.2"  "TTTGGAGCAACTGTGT_Naiv-1.1" "TTTGGAGGTTAAGACA_Naiv-1.2"
+#[6] "TTTGTTGTCTTACTGT_Naiv-2.1"
+
+
+sample.meta$barcode <- bar.sample.temp3
+sample$barcode <- bar.sample.temp3
+
+
+
+#you will use these to match with your individual sample loom files later (if you are working with integrated data)
+
+
+#sample$cluster.type <- colnames(sample)
+#bar2.gr1.temp <- str_replace(sample$cluster.type,"t.+?_t.+?_","")
+#head(bar2.gr1.temp)
+#[1] "Naiv-1.1_AAACCCACATCTAACG-1_1" "Naiv-1.1_AAACCCAGTGGAAGTC-1_1" "Naiv-1.1_AAACCCATCGCCTTGT-1_1" "Naiv-1.1_AAACGAAAGCGTGAAC-1_1"
+#[5] "Naiv-1.1_AAACGAAAGGTAAAGG-1_1" "Naiv-1.1_AAACGAACACACGTGC-1_1"
+
+
+#bar2.gr2.temp <- str_replace(bar2.gr1.temp,"^[^_]*_","")# till first underscore 
+#head(bar2.gr2.temp)
+#[1] "AAACCCACATCTAACG-1_1" "AAACCCAGTGGAAGTC-1_1" "AAACCCATCGCCTTGT-1_1" "AAACGAAAGCGTGAAC-1_1" "AAACGAAAGGTAAAGG-1_1" "AAACGAACACACGTGC-1_1"
+
+
+#k<-sample$orig.ident
+#head(k)
+#t2_t1_Naiv-1.1_AAACCCACATCTAACG-1_1 t2_t1_Naiv-1.1_AAACCCAGTGGAAGTC-1_1 t2_t1_Naiv-1.1_AAACCCATCGCCTTGT-1_1 #t2_t1_Naiv-1.1_AAACGAAAGCGTGAAC-1_1 
+#                         "Naiv-1.1"                          "Naiv-1.1"                          "Naiv-1.1"                          #"Naiv-1.1" 
+#t2_t1_Naiv-1.1_AAACGAAAGGTAAAGG-1_1 t2_t1_Naiv-1.1_AAACGAACACACGTGC-1_1 
+#                         "Naiv-1.1"                          "Naiv-1.1" 
+
+                         
+#k.temp <- str_replace(k,"t.+?_t.+?_","")
+#head(k.temp)
+#[1] "Naiv-1.1" "Naiv-1.1" "Naiv-1.1" "Naiv-1.1" "Naiv-1.1" "Naiv-1.1"
+#> tail(k.temp)
+#[1] "Inf-3.2" "Inf-3.2" "Inf-3.2" "Inf-3.2" "Inf-3.2" "Inf-3.2"
+
+
+#cl<-paste(bar2.gr1.temp,k.temp,sep="_")
+
+
+
+#> head(cl)
+#[1] "AAACCCAAGATAGCAT-1_1_Naiv-1.1" "AAACCCACATCTAACG-1_1_Naiv-1.1" "AAACCCAGTGGAAGTC-1_1_Naiv-1.1" "AAACCCATCGCCTTGT-1_1_Naiv-1.1"
+#[5] "AAACGAAAGACGGATC-1_1_Naiv-1.1" "AAACGAAAGCGTGAAC-1_1_Naiv-1.1"
+#> tail(cl)
+#[1] "TTTGGAGCAACTGTGT-1_11_Inf-2.1" "TTTGGAGGTTAAGACA-1_11_Inf-2.1" "TTTGTTGAGACTCGAG-1_11_Inf-2.1" "TTTGTTGAGTGGTGAC-1_11_Inf-2.1"
+#[5] "TTTGTTGTCACTGTCC-1_11_Inf-2.1" "TTTGTTGTCTTACTGT-1_11_Inf-2.1"
+
+
+#sample$cluster.type <-cl
+
+
+
+#check for duplications
+dup.sample<- sample.meta[duplicated(sample.meta$barcode),]
+
+outname = paste0(name, "_cells_metadata_renamed.csv")
+write.csv(sample.meta, file=outname, quote=F, row.names=F)
+
+#write expression counts matrix
+sample_counts_matrix <- GetAssayData(sample, assay = "RNA", slot='counts')
+colnames(sample_counts_matrix) <- rownames(sample.meta)
+outname = paste0(name, "_cell_counts.mtx")
+writeMM(sample_counts_matrix, file=outname)
+
+#write PCA matrix
+sample.embeddings <- sample@reductions$pca@cell.embeddings
+rownames(sample.embeddings) <- rownames(sample.meta)
+outname = paste0(name, "_pca.csv")
+write.csv(sample.embeddings, file=outname , quote = F, row.names=F)
+
+#write gene names
+outname = paste0(name, "_gene_names.csv")
+write.table(data.frame('gene'=rownames(sample_counts_matrix)),file=outname ,quote=F, row.names=F, col.names=F)
+
+
+#write cell IDs (barcodes)
+outname = paste0(name, "_cellID_obs.csv")
+write.csv(sample.meta$barcode,file=outname, row.names = FALSE)
+
+```
