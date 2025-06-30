@@ -1,0 +1,259 @@
+---
+title: "Trajectory Analysis _ Myeloid Cells"
+author: "Sagar Utturkar and Nadia Lanman"
+date: "`r Sys.Date()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    toc: true
+    highlight: github
+---
+
+
+```{r library, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval=TRUE}
+
+library(Seurat)
+library(Seurat)
+library(dplyr)
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+library(ggplot2)
+library(cowplot)
+library(data.table)
+library(dplyr)
+library(RColorBrewer)
+library(SeuratWrappers)
+library(monocle3)
+
+
+
+
+
+
+
+```
+
+
+## Seurat Clustering 
+
+### Cluster map through Seurat:
+
+```{r read_data, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval = T, results = "hide", fig.height=8, fig.width=12}
+
+rm(list=ls())
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9/")
+sample<- readRDS("clustering-r5-pc21_SCT.rds")
+dim(sample)
+DefaultAssay(sample)<-"RNA"
+
+DimPlot(sample, reduction = "umap", label = TRUE, label.size = 8, pt.size = 1) 
+DimPlot(sample, reduction = "umap", label = TRUE, label.size = 8, pt.size = 1, split.by = "orig.ident") 
+
+```
+
+
+
+## Bringing Seurat Data to Monocle:
+
+```{r brng_to_Monocle, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval = F, results = "hide", fig.height=8, fig.width=12}
+
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/8_Monocle/")
+
+cds = as.cell_data_set(sample) #converts the raw count data from a scRNA-seq experiment into a "CellDataSet" object which is a container for storing and manipulating scRNA-seq data.The "as.cell_data_set()" function is typically part of a scRNA-seq analysis package like "scran" or "scater".
+
+#  get cell metadata
+colData(cds) 
+
+# get gene metadata
+fData(cds) #stands for "feature data", and it returns a data frame containing information about the features (genes)
+rownames(fData(cds))[1:10]
+fData(cds)$gene_short_name = rownames(fData(cds))
+#fData-->gene names
+# get counts
+## counts(cds)
+
+
+# Transfer clustering information from Seurat to Monocle3 (includes partition, clustering and UMAP cell embedding information)
+
+# assign partitions
+## cds@clusters$UMAP$partitions #Each integer corresponds to a unique cell cluster identified by the clustering algorithm.
+
+recreate.partition = rep(1, length(cds@colData@rownames))
+names(recreate.partition) = cds@colData@rownames
+recreate.partition = as.factor(recreate.partition)
+
+cds@clusters$UMAP$partitions = recreate.partition
+
+
+# Assign cluster info
+list_cluster = sample@active.ident
+cds@clusters$UMAP$clusters = list_cluster
+
+# Assign UMPA coordinates - cell embeddings
+cds@int_colData@listData$reducedDims$UMAP = sample@reductions$umap@cell.embeddings
+
+outname = paste0(name, "_cds_obj.rds")
+saveRDS(cds, file = outname)
+
+```
+
+### Cluster map through Monocle3:
+
+```{r show_monocle, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval = T, results = "hide", fig.height=8, fig.width=12}
+
+setwd("/depot/pccr/data/Low_lab_projects/hr03128_single-cell-RNAseq-study_2021/4_Monocle")
+
+inname = paste0(name, "_cds_obj.rds")
+cds = readRDS(file = inname)
+
+# plot
+
+cluster_before_trajectory = plot_cells(cds,
+           color_cells_by = 'cluster',
+           label_groups_by_cluster = F,
+           group_label_size = 5
+           ) +
+  theme(legend.position = "right")
+
+
+cluster_names = plot_cells(cds,
+           color_cells_by = 'orig.ident',
+           label_groups_by_cluster = F,
+           group_label_size = 5
+           ) +
+  theme(legend.position = "right")
+
+
+cluster_before_trajectory
+
+cluster_names
+
+```
+
+
+## Calculate Trajectory with Monocle:
+
+### Trajectory plot:
+```{r monocle_trajectory1, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval = F, results = "hide", fig.height=8, fig.width=12}
+
+##################################################################
+# Learn Trajectory
+cds = learn_graph(cds, use_partition = F)
+
+outname = paste0(name, "_cds_trajectory.rds")
+saveRDS(cds, file = outname)
+
+```
+
+
+
+```{r monocle_trajectory2, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval = T, results = "hide", fig.height=8, fig.width=12}
+
+inname = paste0(name, "_cds_trajectory.rds")
+cds = readRDS(file = inname)
+
+plot_cells(cds, 
+           color_cells_by = "cluster",
+           label_groups_by_cluster = F,
+           label_branch_points = F,
+           label_roots = T,
+           label_leaves = T,
+           group_label_size = 8)
+
+
+```
+
+
+### Cells Arranged by Pseudotime:
+This plot shows the cells colored by pseudotime (Color gradation denotes increase in pseudotime). Cells with lower pseudotime are shown in purple and highest pseudotime are in yellow.  
+
+
+```{r monocle_trajectory3, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval = T, results = "hide", fig.height=8, fig.width=12}
+
+# order cells in pseudo time
+cds = order_cells(cds, reduction_method = 'UMAP', root_cells = colnames(cds[, clusters(cds) == 3]))
+
+
+plot_cells(cds, 
+           color_cells_by = "pseudotime",
+           label_groups_by_cluster = F,
+           label_branch_points = F,
+           label_roots = T,
+           label_leaves = T,
+           group_label_size = 8)
+
+# Cluster 9 has the highest median pseudotime.
+
+#Updating the root node as 9 to find the precursor states the cluster-9 derived from
+
+cds = order_cells(cds, reduction_method = 'UMAP', root_cells = colnames(cds[, clusters(cds) == 3]))
+
+
+plot_cells(cds, 
+           color_cells_by = "pseudotime",
+           label_groups_by_cluster = F,
+           label_branch_points = F,
+           label_roots = T,
+           label_leaves = T,
+           group_label_size = 8)
+# Cluster 6 has the highest median pseudotime while C4,C8,C7 are having next highest pseudo time.
+
+```
+
+Boxplot shown below denotes the Seurat clusters arranged by median pseudotime. Cluster0-8 has lowest median pseudotime while cluster9 has highest median pseudotime.  
+ 
+```{r monocle_trajectory4, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval = T, results = "hide", fig.height=8, fig.width=12}
+
+# order cells by monocle3 pseudotime
+cds$monocle_pseudotime = pseudotime(cds)
+
+data.pseudo = as.data.frame(colData(cds))
+#head(data.pseudo)
+
+ggplot(data.pseudo, aes(monocle_pseudotime, 
+                        reorder(seurat_clusters, monocle_pseudotime, median), 
+                        fill = seurat_clusters)) +
+  geom_boxplot()
+
+```
+
+
+
+# Calculate DE genes by Pseudotime:
+
+```{r DE_trajectory1, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval = F, results = "hide", fig.height=8, fig.width=12}
+
+
+# DE genes as function of pseudotime
+deg_time = graph_test(cds, neighbor_graph = 'principal_graph', cores = 16)
+outname = paste0(name, "_deg_time.rds")
+saveRDS(deg_time, file = outname)
+
+
+outname = paste0(name, "_DE_by_pseudotime.txt")
+write.table(deg_time, file = outname, sep = "\t", row.names = F, quote = F)
+
+```
+
+### Visualization of top 10 DE genes by Pseudotime:
+
+```{r DE_trajectory2, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval = T, results = "hide", fig.height=8, fig.width=12}
+
+setwd("/depot/pccr/data/Low_lab_projects/hr03128_single-cell-RNAseq-study_2021/4_Monocle")
+
+inname = paste0(name, "_deg_time.rds")
+deg_time = readRDS(file = inname)
+
+deg_filtered = deg_time %>%
+  dplyr::arrange(q_value) %>%
+  dplyr::filter(status == 'OK')
+
+deg_top10 = rownames(deg_filtered)[1:10]
+
+FeaturePlot(sample, features = deg_top10)
+
+```
+
+
+cds<-cluster_cells(cds, cluster_method = 'louvain')
