@@ -1,6 +1,6 @@
 ---
 title: "Trajectory Analysis - Myeloid Cells - Root cells MC2"
-author: "Sagar Utturkar and Nadia Lanman"
+author: "Nikhila"
 date: "`r Sys.Date()`"
 output:
   prettydoc::html_pretty:
@@ -19,86 +19,99 @@ library(dplyr)
 library(tidyverse)
 library(knitr)
 library(kableExtra)
+library(ggthemes)
+library(ggplot2)
+library(cowplot)
+library(data.table)
 library(monocle)
 library(RColorBrewer)
+library(glmGamPoi)
+library(clustree)
+library(ggraph)
 
-setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9/")
-sample<- readRDS("clustering-r5-pc21_SCT.rds")
 
-name = "Myeloid_for_TJ"
+library(xlsx)
+
+
+library(magrittr)
+options(java.parameters = "-Xmx8000m")
+
+library(future)
+options(future.globals.maxSize = 990000*1024^2)
+
+
+name = "LSC_for_TJ"
 
 ```
 
 
-## Seurat Clustering -  Myeloid  cell population
+## Seurat Clustering -  LSC  cell population
 
 ### Cluster map through Seurat:
 
-```{r read_data, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE,  results = "hide", fig.height=6, fig.width=8, eval = T}
+```{r read_data, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE,results = "hide",fig.height=6,fig.width=8,eval = T}
 
-setwd("/depot/pccr/data/Low_lab_projects/hr03128_single-cell-RNAseq-study_2021/5_Analysis_with_Monocle2/Myeloid_6Clust")
+rm(list=ls())
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9/")
+sample<- readRDS("clustering-r5-pc21_SCT.rds")
+dim(sample)
 
-name = "Myeloid_for_TJ"
-outname = paste0(name,"_SCT.rds")
-sample = readRDS(file = outname )
 
-DefaultAssay(sample) <- 'RNA'
+
+DefaultAssay(sample) <- "RNA"
 
 DimPlot(sample, reduction = "umap", label = TRUE, label.size = 8, pt.size = 1) 
 DimPlot(sample, reduction = "umap", label = TRUE, label.size = 8, pt.size = 1, split.by = "orig.ident") 
 
-# mk <- FindAllMarkers(sample, min.pct = 0.3, min.diff.pct = 0.2, only.pos = T)
-# outname = paste0(name, "_mk.rds")
-# saveRDS(mk, file = outname)
 
-sample <- NormalizeData(sample)
+norm.sample <- NormalizeData(sample)
 
 ```
 
 
 
 ## Bringing Seurat Data to Monocle:
-We followed [this simple tutorial](https://bookdown.org/ytliu13207/SingleCellMultiOmicsDataAnalysis/monocle2.html) to convert the Seurat object to CellDataSet object.  
-First, we estimate size factor to remove any outliers. Size factors help us normalize for differences in mRNA recovered across cells, and "dispersion" values 
-will help us perform differential expression analysis later.   
+#We followed [this simple tutorial](https://bookdown.org/ytliu13207/SingleCellMultiOmicsDataAnalysis/monocle2.html) to convert the Seurat object to #CellDataSet object.  
+#First, we estimate size factor to remove any outliers. Size factors help us normalize for differences in mRNA recovered across cells, and #"dispersion" values  will help us perform differential expression analysis later.   
 
 
-Before we get into the details of ordering cells along a trajectory, it's important to understand what Monocle is doing. The ordering workflow has three main steps, 
-each of which involve a significant machine learning task.
+#Before we get into the details of ordering cells along a trajectory, it's important to understand what Monocle is doing. The ordering workflow has #three main steps, each of which involve a significant machine learning task.
 
 
-1. Step 1: choosing genes that define progress:
-First, we must decide which genes we will use to define a cell's progress. As recommended by Monocle, we selected genes that differ between clusters 
-(i.e. Cluster marker genes determined through Seurat) that will define the cell's progress. 
+#1. Step 1: choosing genes that define progress:
+#First, we must decide which genes we will use to define a cell's progress. As recommended by Monocle, we selected genes that differ between clusters 
+#(i.e. Cluster marker genes determined through Seurat) that will define the cell's progress. 
 
-2. Step 2: reducing the dimensionality of the data:
-We used these cluster marker genes to order the cells followed by *dimensionality reduction*.
+#2. Step 2: reducing the dimensionality of the data:
+#We used these cluster marker genes to order the cells followed by *dimensionality reduction*.
 
-3.  Step 3: ordering the cells in pseudotime:
-At this step, expression data is already projected into a lower dimensional space. Monocle is ready to learn the trajectory that describes how cells 
-transition from one state into another. Monocle assumes that the trajectory has a tree structure, with one end of it the "root", and 
-the others the "leaves". Monocle will fit the best tree it can to data. A cell at the beginning of the biological process starts at the root 
-and progresses along the trunk until it reaches the first branch, if there is one. That cell must then choose a path, and moves further and further 
-along the tree until it reaches a leaf. A cell's pseudotime value is the distance it would have to travel to get back to the root.   
-
-
-
-> Root node set to Cluster MC2.  
+#3.  Step 3: ordering the cells in pseudotime:
+#At this step, expression data is already projected into a lower dimensional space. Monocle is ready to learn the trajectory that describes how cells 
+#transition from one state into another. Monocle assumes that the trajectory has a tree structure, with one end of it the "root", and 
+#the others the "leaves". Monocle will fit the best tree it can to data. A cell at the beginning of the biological process starts at the root 
+#and progresses along the trunk until it reaches the first branch, if there is one. That cell must then choose a path, and moves further and further 
+#along the tree until it reaches a leaf. A cell's pseudotime value is the distance it would have to travel to get back to the root.   
 
 
 
-```{r brng_to_Monocle, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, results = "hide", fig.height=8, fig.width=12,  eval = F}
+#> Root node set to Cluster MC2.  
 
-setwd("/depot/pccr/data/Low_lab_projects/hr03128_single-cell-RNAseq-study_2021/5_Analysis_with_Monocle2/Myeloid_6Clust")
 
-cds = as.CellDataSet(sample)
+
+```{r brng_to_Monocle, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, results = "hide", fig.height=8, fig.width=12,  eval = T}
+
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/8_Monocle/Monocle-2/")
+
+cds = as.CellDataSet(norm.sample)
 cds <- estimateSizeFactors(cds)
 cds <- estimateDispersions(cds)
 
-root_cluster = "2"
+root_cluster = "3"
   
 ## ordering by marker gene per cluster
-deg <- readRDS('Myeloid_for_TJ_mk.rds')
+#deg <- readRDS('LSC_for_TJ.rds')
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9/")
+deg<-read.csv("all-r5-pc21-markers.csv")
 deg <- deg[which(deg$cluster %in% unique(sample$seurat_clusters)), ]
 sel.gene <- unique(deg$gene)
 cds <- monocle::setOrderingFilter(cds, sel.gene)
@@ -136,15 +149,15 @@ saveRDS(cds, file = outname)
 
 
 ### Trajectory colored by Cell State:
-During development, in response to stimuli, and througout life, cells transition from one functional "state" to another. These transient 
-states are often hard to characterize because purifying cells in between more stable endpoint states can be difficult or impossible. 
-Single-cell RNA-Seq can enable you to see these states without the need for purification. Rather than purifying cells into discrete states 
-experimentally, Monocle uses an algorithm to learn the sequence of gene expression changes each cell must go through as part of a 
-dynamic biological process.
+#During development, in response to stimuli, and througout life, cells transition from one functional "state" to another. These transient 
+#states are often hard to characterize because purifying cells in between more stable endpoint states can be difficult or impossible. 
+#Single-cell RNA-Seq can enable you to see these states without the need for purification. Rather than purifying cells into discrete states 
+#experimentally, Monocle uses an algorithm to learn the sequence of gene expression changes each cell must go through as part of a 
+#dynamic biological process.
 
 ```{r show_monocle2, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval = T, results = "hide", fig.height=8, fig.width=12}
 
-setwd("/depot/pccr/data/Low_lab_projects/hr03128_single-cell-RNAseq-study_2021/5_Analysis_with_Monocle2/Myeloid_6Clust")
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/8_Monocle/Monocle-2/")
 
 inname = paste0(name, "_cds_obj.rds")
 cds = readRDS(file = inname)
@@ -158,11 +171,11 @@ monocle::plot_cell_trajectory(cds, color_by = "State") + facet_wrap(~State)
 
 ### Trajectory colored by Cluster:
 
-Once it has learned the overall "trajectory" of gene expression changes, Monocle can place each cell at its proper position in the trajectory.
+#Once it has learned the overall "trajectory" of gene expression changes, Monocle can place each cell at its proper position in the trajectory.
 
 ```{r show_monocle1, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval = T, results = "hide", fig.height=6, fig.width=8}
 
-setwd("/depot/pccr/data/Low_lab_projects/hr03128_single-cell-RNAseq-study_2021/5_Analysis_with_Monocle2/Myeloid_6Clust")
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/8_Monocle/Monocle-2/")
 
 
 monocle::plot_cell_trajectory(cds, color_by = "seurat_clusters") 
@@ -173,20 +186,20 @@ monocle::plot_cell_trajectory(cds, color_by = "seurat_clusters")  + facet_wrap(~
 
 
 ### Trajectory colored by Pseudotime:
-Pseudotime is a measure of how much progress an individual cell has made through a process such as cell differentiation. In many biological processes, 
-cells do not progress in perfect synchrony. In single-cell expression studies of processes such as cell differentiation, captured cells might be 
-widely distributed in terms of progress. That is, in a population of cells captured at exactly the same time, some cells might be far along, 
-while others might not yet even have begun the process. This asynchrony creates major problems when you want to understand the sequence of 
-regulatory changes that occur as cells transition from one state to the next.   
+#Pseudotime is a measure of how much progress an individual cell has made through a process such as cell differentiation. In many biological #processes, 
+#cells do not progress in perfect synchrony. In single-cell expression studies of processes such as cell differentiation, captured cells might be 
+#widely distributed in terms of progress. That is, in a population of cells captured at exactly the same time, some cells might be far along, 
+#while others might not yet even have begun the process. This asynchrony creates major problems when you want to understand the sequence of 
+#regulatory changes that occur as cells transition from one state to the next.   
 
-By ordering each cell according to its progress along a learned trajectory, Monocle alleviates the problems that arise due to asynchrony.  
-Instead of tracking changes in expression as a function of time, Monocle tracks changes as a function of progress along the trajectory, 
-which we term pseudotime''. 
+#By ordering each cell according to its progress along a learned trajectory, Monocle alleviates the problems that arise due to asynchrony.  
+#Instead of tracking changes in expression as a function of time, Monocle tracks changes as a function of progress along the trajectory, 
+#which we term pseudotime''. 
 
-> Pseudotime is an abstract unit of progress: it's simply the distance between a cell and the start of the trajectory, measured along the shortest path.   
+#> Pseudotime is an abstract unit of progress: it's simply the distance between a cell and the start of the trajectory, measured along the shortest #path.   
 
 
-> The trajectory's total length is defined in terms of the total amount of transcriptional change that a cell undergoes as it moves from the starting state to the end state.  
+#> The trajectory's total length is defined in terms of the total amount of transcriptional change that a cell undergoes as it moves from the #starting state to the end state.  
 
 
 
@@ -207,8 +220,8 @@ p
 
 
 ### Trajectory faceted by Seurat clusters and colored by State:
-We have selected cluster marker genes as defining the cell's progress. It may be intersting to visualizae the data faceted by each cluster
-and colored by `state`. This will clearly denote `state` for cells within a specific cluster.  
+#We have selected cluster marker genes as defining the cell's progress. It may be intersting to visualizae the data faceted by each cluster
+#and colored by `state`. This will clearly denote `state` for cells within a specific cluster.  
 
 
 
@@ -223,8 +236,8 @@ monocle::plot_cell_trajectory(cds, color_by = "State") + facet_wrap(~seurat_clus
 ```
 
 ### Trajectory faceted by Seurat clusters and colored by Pseudotime:
-We have selected cluster marker genes as defining the cell's progress. It may be intersting to visualizae the data faceted by each cluster
-and colored by `Pseudotime`. This will clearly denote `Pseudotime` for cells within a specific cluster.  
+#We have selected cluster marker genes as defining the cell's progress. It may be intersting to visualizae the data faceted by each cluster
+#and colored by `Pseudotime`. This will clearly denote `Pseudotime` for cells within a specific cluster.  
 
 
 ```{r show_monocle5, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval = T, results = "hide", fig.height=8, fig.width=12}
@@ -238,8 +251,8 @@ monocle::plot_cell_trajectory(cds, color_by = "Pseudotime") + facet_wrap(~seurat
 
 
 ### Visualize gene expression (Randomly selected Markers for MC1):
-We can denote the progression of individual gene expression through Pseudotime. As an example, we randomly selected 5 marker genes for Cluster1 and plotted along the Pseudotime.
-We see a down-regulation of gene-expression as data progress through Pseudotime.  
+#We can denote the progression of individual gene expression through Pseudotime. As an example, we randomly selected 5 marker genes for Cluster1 and #plotted along the Pseudotime.
+#We see a down-regulation of gene-expression as data progress through Pseudotime.  
 
 
 ```{r show_monocle_DE1, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval = T, results = "hide", fig.height=8, fig.width=12}
@@ -258,8 +271,8 @@ plot_genes_in_pseudotime(cds_subset, color_by = "seurat_clusters")
 
 
 ### Visualize gene expression (User defined markers):
-We can denote the progression of individual gene expression through Pseudotime. As an example, user defined markers `Arg1, Mmp9, Mrc1, Fcgr1 and Ifit1bl2` plotted along the Pseudotime.
-We see a down-regulation of gene-expression as data progress through Pseudotime.  
+#We can denote the progression of individual gene expression through Pseudotime. As an example, user defined markers `Arg1, Mmp9, Mrc1, Fcgr1 and #Ifit1bl2` plotted along the Pseudotime.
+#We see a down-regulation of gene-expression as data progress through Pseudotime.  
 
 
 ```{r show_monocle_DE2, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval = T, results = "hide", fig.height=8, fig.width=12}
@@ -276,8 +289,8 @@ plot_genes_in_pseudotime(cds_subset, color_by = "orig.ident")
 
 
 ### Trajectory faceted by treatment and colored by pseudotime:
-We have selected cluster marker genes as defining the cell's progress. It may be intersting to visualizae the data faceted by each cluster
-and colored by `state`. This will clearly denote `state` for cells within a specific cluster.  
+#We have selected cluster marker genes as defining the cell's progress. It may be intersting to visualizae the data faceted by each cluster
+#and colored by `state`. This will clearly denote `state` for cells within a specific cluster.  
 
 
 ```{r show_monocle6, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval = T, results = "hide", fig.height=8, fig.width=12}
@@ -295,7 +308,6 @@ monocle::plot_cell_trajectory(cds, color_by = "State") + facet_wrap(~orig.ident)
 
 setwd("/depot/pccr/data/Low_lab_projects/hr03128_single-cell-RNAseq-study_2021/5_Analysis_with_Monocle2/Myeloid_6Clust")
 
-
 monocle::plot_cell_trajectory(cds, color_by = "orig.ident") 
 
 monocle::plot_cell_trajectory(cds, color_by = "orig.ident")  + facet_wrap(~orig.ident)
@@ -308,11 +320,11 @@ monocle::plot_cell_trajectory(cds, color_by = "orig.ident")  + facet_wrap(~orig.
 
 setwd("/depot/pccr/data/Low_lab_projects/hr03128_single-cell-RNAseq-study_2021/5_Analysis_with_Monocle2/Myeloid_6Clust")
 
-
 monocle::plot_cell_trajectory(cds, color_by = "seurat_clusters") 
 
 monocle::plot_cell_trajectory(cds, color_by = "seurat_clusters")  + facet_wrap(~orig.ident)
 
 ```
+
 
 
