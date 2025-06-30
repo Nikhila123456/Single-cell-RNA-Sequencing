@@ -1,0 +1,452 @@
+---
+title: "Pathway_Analysis"
+author: "Nikhila"
+date: "January 9, 2024"
+output: html_document
+---
+
+
+
+
+```{r library_1, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval = T}
+
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9")
+
+require(data.table)
+
+
+#library(org.Cf.eg.db)
+library(AnnotationDbi)
+#library(msigdbr)
+library(ggplot2)
+library(cowplot)
+#library(ReactomePA)
+#library(enrichplot)
+library(org.Mm.eg.db)
+library(tidyselect)
+library(tidyverse)
+library(dplyr)
+
+library(data.table)
+remotes::install_github("YuLab-SMU/clusterProfiler") 
+
+# install the packages
+remotes::install_github("YuLab-SMU/createKEGGdb")
+# import the library and create a KEGG database locally 
+library(createKEGGdb)
+species <-c("ath","hsa","mmu", "rno","dre","dme","cel")
+createKEGGdb::create_kegg_db(species)
+# You will get KEGG.db_1.0.tar.gz file in your working directory
+
+
+install.packages("KEGG.db_1.0.tar.gz", repos=NULL,type="source")
+library(KEGG.db)
+
+
+data(gcSample)
+yy = enrichKEGG(gcSample[[5]], pvalueCutoff=0.01, use_internal_data=T)
+head(summary(yy))
+
+
+#library(clusterProfiler)
+#package.version("clusterProfiler")
+
+
+
+#if(!requireNamespace("remotes", quietly = TRUE))
+#    install.packages("remotes")
+#remotes::install_github("YuLab-SMU/clusterProfiler")
+#install.packages("remotes",repos = "http://cran.us.r-project.org")
+#remotes::install_github("GuangchuangYu/clusterProfiler")
+
+
+
+#print(sessionInfo())
+```
+
+
+
+
+
+## GO enrichment analysis
+
+
+
+
+#GO classification based on GO distribution at level-3 (1) MF (2)  BP (3) CC
+```{r groupgo, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, results='hide', eval=F, fig.width=16, fig.height=12}
+
+rm(list=ls())
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9")
+df = read.csv("all-r5-pc21-markers.csv", header=TRUE)
+head(df)
+gene.df <- bitr(df$gene, fromType = "SYMBOL",toType = c("ENSEMBL", "ENTREZID"),OrgDb = org.Mm.eg.db)
+names(gene.df)<-c("gene","ENSEMBL","ENTREZID")
+
+df<-merge(df, gene.df, by = "gene")
+head(df)
+
+df$rank = log10(df$p_val) * -1
+
+df = df %>%
+dplyr::select(all_of(c("ENTREZID", "rank")))  %>%
+dplyr::arrange(desc(rank))
+
+my_vector1 = df$ENTREZID
+
+ggo1 <- groupGO(gene     = my_vector1,
+               OrgDb    = org.Mm.eg.db,
+               ont      = "MF",
+               level    = 3,
+               readable = TRUE)
+head(ggo1)
+
+barplot(ggo1)      
+
+ggo2 <- groupGO(gene     = my_vector1,
+               OrgDb    = org.Mm.eg.db,
+               ont      = "BP",
+               level    = 3,
+               readable = TRUE)
+head(ggo2)
+
+barplot(ggo2)   
+
+ggo3 <- groupGO(gene     = my_vector1,
+               OrgDb    = org.Mm.eg.db,
+               ont      = "CC",
+               level    = 3,
+               readable = TRUE)
+head(ggo3)
+barplot(ggo3)        
+              
+```
+## GO over-representation analysis for gene ontology over-representation test.
+```{r enrichgo, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, results='hide', eval=F, fig.width=16, fig.height=12}
+my_vector1 = df$ENTREZID
+ego <- enrichGO(gene          = my_vector1,
+                 OrgDb         = org.Mm.eg.db,
+                 ont           = "CC",
+                 pAdjustMethod = "BH",
+                 pvalueCutoff  = 0.01,
+                 qvalueCutoff  = 0.05,
+                 readable      = TRUE)
+head(ego)
+goplot(ego)
+barplot(ego)
+```
+
+
+## GO Gene Set Enrichment Analysis 
+```{r gsego, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, results='hide', eval=F, fig.width=16, fig.height=12}
+
+
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9")
+#my_genes = openxlsx::read.xlsx(xlsxFile  = "all-r5-pc21_markers.xlsx", sheet =  "all-r5-pc21_markers")
+#my_genes$rank =log10(as.numeric(my_genes$p_val))* -1
+#head(my_gene$rank)
+
+
+
+df = read.csv("all-r5-pc21-markers.csv", header=TRUE)
+head(df)
+
+gene.df <- bitr(df$gene, fromType = "SYMBOL",toType = c("ENSEMBL", "ENTREZID"),OrgDb = org.Mm.eg.db)
+names(gene.df)<-c("gene","ENSEMBL","ENTREZID")
+
+df<-merge(df, gene.df, by = "gene")
+head(df)
+
+#df$rank = as.numeric(log10(df$p_val)) * -1
+df$rank = log10(df$p_val) * -1
+
+df = df %>%
+dplyr::select(all_of(c("ENTREZID", "rank")))  %>%
+dplyr::arrange(desc(rank))
+
+#Feature1
+my_vector = df$rank
+#Feature2
+names(my_vector) = df$ENTREZID
+
+head(my_vector)
+
+ego3 <- gseGO(geneList     = my_vector,
+OrgDb        = org.Mm.eg.db,
+ont          = "BP",
+pvalueCutoff = 0.05,
+verbose      = FALSE)
+
+goplot(ego3)
+
+#df<-df[order(-df$p_val),]
+#head(df)
+
+#gene_list<-df$p_val
+#names(gene_list)<-df$ENSEMBL
+
+#head(gene_list)
+#gse<-gseGO(gene_list,ont="BP",keyType ="ENSEMBL", OrgDb = "org.Mm.eg.db", eps=1e-300)
+
+dotplot(ego3)
+
+```
+
+
+
+
+# Enriched GO terms as a directed acyclic graph
+
+```{r goplot, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, results='hide', eval=F, fig.width=16, fig.height=12}
+ego <- enrichGO(gene          = my_vector1,
+                 OrgDb         = org.Mm.eg.db,
+                 ont           = "CC",
+                 pAdjustMethod = "BH",
+                 pvalueCutoff  = 0.01,
+                 qvalueCutoff  = 0.05,
+                 readable      = TRUE)
+```
+
+
+
+
+## KEGG pathways 
+
+```{r KEGG_clusters, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, results='hide', eval=F, fig.width=16, fig.height=12}
+
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9")
+
+name = "all-r5-pc21"
+outname = paste0(name,"_markers.rds")
+markers = readRDS(outname)
+
+cid = unique(markers$cluster)
+
+my_list = list()
+
+for (c in cid) {  
+  x = markers %>%
+  dplyr::filter(cluster == c) %>%
+    dplyr::filter(p_val_adj < 0.05) %>%
+  .$gene %>% unique()
+  
+  ENT_ID = bitr(x, fromType="SYMBOL", toType="ENTREZID", OrgDb=org.Mm.eg.db)
+  
+  my_list[[c]] = ENT_ID$ENTREZID
+}
+
+
+lapply(my_list, length)
+
+cid_KEGG <- compareCluster(geneCluster = my_list, organism = "mmu",fun = "enrichKEGG")
+
+dotplot(cid_KEGG)
+
+write.csv(cid_KEGG, file="KEGG_by_cluster.csv", row.names = FALSE, quote = F)
+
+```
+
+## Reactome Pathways
+```{r RCT_clusters, warning=FALSE, message=FALSE, echo=FALSE, results='hide', tidy=TRUE, eval=F, fig.width=16, fig.height=20}
+
+cid_RCT <- compareCluster(geneCluster = my_list, organism = "mouse",fun = "enrichPathway")
+
+dotplot(cid_RCT) + scale_y_discrete(labels=function(x) str_wrap(x, width=40))
+
+write.csv(cid_RCT, file="REACTOME_by_cluster.csv", row.names = FALSE, quote = F)
+
+
+```
+
+## Go (Biological Process) terms
+```{r Go.BP_clusters, warning=FALSE, message=FALSE, echo=FALSE, results='hide', tidy=TRUE, eval=F, fig.width=16, fig.height=20}
+
+cid_Go.BP <- compareCluster(geneCluster = my_list,  OrgDb = org.Mm.eg.db, ont = "BP",fun = "enrichGO")
+
+dotplot(cid_Go.BP) + scale_y_discrete(labels=function(x) str_wrap(x, width=40))
+
+write.csv(cid_Go.BP, file="GO.BP_by_cluster.csv", row.names = FALSE, quote = F)
+
+```
+
+
+# Enrichment Analysis of DEGs between G1-tumor compared against other individual treatments
+
+> Please note that DE genes selection cutoff was updated to less stringent (p_val < 0.10). The preferred cutoff is > (p_val_adj < 0.05). However, the pathway of interest (Toll like receptor pathway) shows up only at this less stringent cutoff.  
+
+## KEGG Pathways
+
+```{r KEGG_treatment_G1_compare, warning=FALSE, message=FALSE, results='hide', echo=FALSE, tidy=TRUE, eval=F, fig.width=12, fig.height=10}
+
+setwd("/depot/pccr/data/Low_lab_projects/hr03128_single-cell-RNAseq-study_2021/2_Seurat/Integrate/Tumor/Integrate_res0.6")
+
+name = "Tumor"
+outname = paste0(name,"_markers.rds")
+markers = readRDS(outname)
+
+setwd("/depot/pccr/data/Low_lab_projects/hr03128_single-cell-RNAseq-study_2021/2_Seurat/Integrate/Tumor/DE_by_treatment")
+
+
+G1_vs_G2_markers = read.table(file = "G1_vs_G2_markers.txt", sep = "\t", header = T, check.names = F)
+G1_vs_G3_markers = read.table(file = "G1_vs_G3_markers.txt", sep = "\t", header = T, check.names = F)
+G1_vs_G4_markers = read.table(file = "G1_vs_G4_markers.txt", sep = "\t", header = T, check.names = F)
+
+cutoff = 0.10
+
+G1_vs_G2_markers = dplyr::filter(G1_vs_G2_markers, p_val < cutoff)
+G1_vs_G3_markers = dplyr::filter(G1_vs_G3_markers, p_val < cutoff)
+G1_vs_G4_markers = dplyr::filter(G1_vs_G4_markers, p_val < cutoff)
+
+
+G1_vs_G2_markers = bitr(G1_vs_G2_markers$Gene_ID, fromType="SYMBOL", toType="ENTREZID", OrgDb=org.Mm.eg.db)
+G1_vs_G3_markers = bitr(G1_vs_G3_markers$Gene_ID, fromType="SYMBOL", toType="ENTREZID", OrgDb=org.Mm.eg.db)
+G1_vs_G4_markers = bitr(G1_vs_G4_markers$Gene_ID, fromType="SYMBOL", toType="ENTREZID", OrgDb=org.Mm.eg.db)
+
+
+my_list = list()
+
+my_list[["G1_vs_G2"]] = G1_vs_G2_markers$ENTREZID
+my_list[["G1_vs_G3"]] = G1_vs_G3_markers$ENTREZID
+my_list[["G1_vs_G4"]] = G1_vs_G4_markers$ENTREZID
+
+
+lapply(my_list, length)
+
+
+cid_KEGG <- compareCluster(geneCluster = my_list, organism = "mmu",
+                     fun = "enrichKEGG")
+
+
+dotplot(cid_KEGG)
+
+
+write.csv(cid_KEGG, file="KEGG_by_G1-pairwise.csv", row.names = FALSE, quote = F)
+
+
+```
+
+## Reactome Pathways
+```{r RCT_treatment_G1_compare, warning=FALSE, message=FALSE, echo=FALSE, results='hide', tidy=TRUE, eval=F, fig.width=12, fig.height=10}
+
+cid_RCT <- compareCluster(geneCluster = my_list, organism = "mouse",
+                     fun = "enrichPathway")
+
+dotplot(cid_RCT) + scale_y_discrete(labels=function(x) str_wrap(x, width=40))
+
+write.csv(cid_RCT, file="REACTOME_by_G1-pairwise", row.names = FALSE, quote = F)
+
+```
+
+
+## Go (Biological Process) terms
+```{r GO.BP_treatment_G1_compare, warning=FALSE, message=FALSE, echo=FALSE, results='hide', tidy=TRUE, eval=F, fig.width=16, fig.height=10}
+
+cid_Go.BP <- compareCluster(geneCluster = my_list,  OrgDb = org.Mm.eg.db, ont = "BP",
+                     fun = "enrichGO")
+
+
+
+
+
+> GOclusterplot <- compareCluster(geneCluster = my_list, fun = "enrichGO", OrgDb = "org.Mm.eg.db")
+> dotplot(GOclusterplot)
+
+
+
+
+dotplot(cid_Go.BP) + scale_y_discrete(labels=function(x) str_wrap(x, width=40))
+
+write.csv(cid_Go.BP, file="GO.BP_by_G1-pairwise.csv", row.names = FALSE, quote = F)
+
+
+```
+
+# Enrichment Analysis of DEGs from each treatment (against all other treatments)
+> Please note that G3-tumor has only 15 DE genes. These genes are very few to derive any significant pathways and hence G3-tumor is absent from most plots.  
+
+
+
+## KEGG Pathways
+```{r KEGG_treatment, warning=FALSE, message=FALSE, echo=FALSE, results='hide', tidy=TRUE, eval=F, fig.width=12, fig.height=10}
+
+setwd("/depot/pccr/data/Low_lab_projects/hr03128_single-cell-RNAseq-study_2021/2_Seurat/Integrate/Tumor/Integrate_res0.6")
+
+name = "Tumor"
+outname = paste0(name,"_markers.rds")
+markers = readRDS(outname)
+
+
+
+setwd("/depot/pccr/data/Low_lab_projects/hr03128_single-cell-RNAseq-study_2021/2_Seurat/Integrate/Tumor/DE_by_treatment")
+
+
+G1_tumor_markers = read.table(file = "G1-tumor_markers.txt", sep = "\t", header = T, check.names = F)
+G2_tumor_markers = read.table(file = "G2-tumor_markers.txt", sep = "\t", header = T, check.names = F)
+G3_tumor_markers = read.table(file = "G3-tumor_markers.txt", sep = "\t", header = T, check.names = F)
+G4_tumor_markers = read.table(file = "G4-tumor_markers.txt", sep = "\t", header = T, check.names = F)
+
+cutoff = 0.05
+G1_tumor_markers = dplyr::filter(G1_tumor_markers, p_val_adj < cutoff)
+G2_tumor_markers = dplyr::filter(G2_tumor_markers, p_val_adj < cutoff)
+G3_tumor_markers = dplyr::filter(G3_tumor_markers, p_val_adj < cutoff)
+G4_tumor_markers = dplyr::filter(G4_tumor_markers, p_val_adj < cutoff)
+
+
+G1_tumor_markers = bitr(G1_tumor_markers$Gene_ID, fromType="SYMBOL", toType="ENTREZID", OrgDb=org.Mm.eg.db)
+G2_tumor_markers = bitr(G2_tumor_markers$Gene_ID, fromType="SYMBOL", toType="ENTREZID", OrgDb=org.Mm.eg.db)
+G3_tumor_markers = bitr(G3_tumor_markers$Gene_ID, fromType="SYMBOL", toType="ENTREZID", OrgDb=org.Mm.eg.db)
+G4_tumor_markers = bitr(G4_tumor_markers$Gene_ID, fromType="SYMBOL", toType="ENTREZID", OrgDb=org.Mm.eg.db)
+
+
+my_list = list()
+
+my_list[["G1"]] = G1_tumor_markers$ENTREZID
+my_list[["G2"]] = G2_tumor_markers$ENTREZID
+my_list[["G3"]] = G3_tumor_markers$ENTREZID
+my_list[["G4"]] = G4_tumor_markers$ENTREZID
+
+lapply(my_list, length)
+
+
+cid_KEGG <- compareCluster(geneCluster = my_list, organism = "mmu",
+                     fun = "enrichKEGG")
+
+
+dotplot(cid_KEGG) + scale_y_discrete(labels=function(x) str_wrap(x, width=40))
+
+
+write.csv(cid_KEGG, file="KEGG_by_treatment.csv", row.names = FALSE, quote = F)
+
+
+```
+
+
+## Reactome Pathways
+```{r RCT_treatment, warning=FALSE, message=FALSE, echo=FALSE, results='hide', tidy=TRUE, eval=F, fig.width=16, fig.height=10}
+
+cid_RCT <- compareCluster(geneCluster = my_list, organism = "mouse",
+                     fun = "enrichPathway")
+
+dotplot(cid_RCT) + scale_y_discrete(labels=function(x) str_wrap(x, width=40))
+
+
+write.csv(cid_RCT, file="REACTOME_by_treatment", row.names = FALSE, quote = F)
+
+
+```
+
+
+
+## Go (Biological Process) terms
+```{r GO.BP_treatment, warning=FALSE, message=FALSE, echo=FALSE, results='hide', tidy=TRUE, eval=F, fig.width=16, fig.height=10}
+
+cid_Go.BP <- compareCluster(geneCluster = my_list,  OrgDb = org.Mm.eg.db, ont = "BP",
+                     fun = "enrichGO")
+
+dotplot(cid_Go.BP) + scale_y_discrete(labels=function(x) str_wrap(x, width=40))
+
+write.csv(cid_Go.BP, file="GO.BP_by_treatment.csv", row.names = FALSE, quote = F)
+
+
+```
+
