@@ -1,0 +1,180 @@
+I have found markers in each cluster in the follwoing way and kept individual excel file per cluster. 
+Now i want to find the unique genes(which are not expressed in other clusters )
+rm(list = ls())
+
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate")
+name = "clustering-r6-naiv-infl"
+outname = paste0(name,"_SCT.rds")
+sample = readRDS(file = outname )
+DefaultAssay(sample) <- "RNA"
+
+sample$cluster.treat <- paste(sample$seurat_clusters, sample$expt.type,  sep = "_")
+my_order = sort(unique(sample$cluster.treat))
+Idents(sample) <- factor(sample$cluster.treat, levels = my_order)
+
+
+treatment = sort(unique(sample@meta.data$expt.type))
+
+cluster =  sort(unique(sample@meta.data$seurat_clusters))
+
+cell_counts = table(sample@meta.data$cluster.treat)
+#Idents(sample)<-"cluster.treat"
+
+for (cell in sort(unique(sample@meta.data$seurat_clusters))) {
+    
+
+  for(i in 1:1) {
+  ID1 = paste(cell, treatment[1], sep = "_")  #Inflamed
+    ID2 = paste(cell, treatment[2], sep = "_")  #Naive
+    comp_name = paste0(ID1, "_VS_", ID2)
+     print(comp_name)
+     sheetname<-comp_name
+      
+    if(ID1 %in% names(cell_counts) == FALSE)  {next}
+    if(ID2 %in% names(cell_counts) == FALSE)  {next}
+      #
+     if(cell_counts[ID1] < 20) {next}
+    if(cell_counts[ID2] < 20 ) {next}
+      
+      x = FindMarkers(sample, ident.1 = ID1,ident.2 = ID2, only.pos = FALSE, verbose = FALSE)  # compares "inflamed" cells to "naive" cells
+      x = rownames_to_column(x, "Gene_ID")
+    outname = paste0(comp_name,".xlsx")
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/markers_group")
+ write.xlsx(x, file = outname, row.names = F)
+#write.xlsx(x,"/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integarted-second-clustering/second/#Multiple_sheets.xlsx",sheetName=sheetname,col.names = TRUE,showNA=TRUE,append=TRUE)
+
+
+#sheets <- list("sheet1Name" = sheet1, "sheet2Name" = sheet2) #assume sheet1 and sheet2 are data frames
+#write_xlsx(x, "")
+
+     }
+
+}
+
+
+
+###############  Unique  markers - i.e., genes that appear only in one cluster's marker list and not in others.
+Are upregulated in one cluster
+
+Collect all DEGs for each cluster_Inflamed vs cluster_Naive pair
+
+Filter genes that are unique to only one cluster’s comparison
+
+Plot their expression across all cluster-treatment combinations
+
+Save unique markers to a single Excel file, with one sheet per cluster.
+
+
+
+library(Seurat)
+library(openxlsx)
+library(dplyr)
+library(tibble)
+library(ggplot2)
+
+# Set up main paths
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate")
+name <- "clustering-r6-naiv-infl"
+outname <- paste0(name, "_SCT.rds")
+
+# Load Seurat object
+sample <- readRDS(file = outname)
+DefaultAssay(sample) <- "RNA"
+
+# Set cluster-treatment identity
+sample$cluster.treat <- paste(sample$seurat_clusters, sample$expt.type, sep = "_")
+Idents(sample) <- factor(sample$cluster.treat, levels = sort(unique(sample$cluster.treat)))
+
+# Define groups
+treatment <- sort(unique(sample@meta.data$expt.type))
+clusters <- sort(unique(sample@meta.data$seurat_clusters))
+cell_counts <- table(sample@meta.data$cluster.treat)
+
+# Output directories
+markers_dir <- "markers_group"
+top5_dir <- "markers_group_1"
+dir.create(markers_dir, showWarnings = FALSE)
+dir.create(top5_dir, showWarnings = FALSE)
+
+# Store DEGs and top 5 unique markers
+deg_list <- list()
+top5_unique_list <- list()
+
+# DEG analysis per cluster
+for (cell in clusters) {
+  ID1 <- paste(cell, treatment[1], sep = "_")  # Inflamed
+  ID2 <- paste(cell, treatment[2], sep = "_")  # Naive
+  comp_name <- paste0(ID1, "_VS_", ID2)
+
+  if (!(ID1 %in% names(cell_counts)) || !(ID2 %in% names(cell_counts))) next
+  if (cell_counts[ID1] < 20 || cell_counts[ID2] < 20) next
+
+  # Differential expression
+  deg <- FindMarkers(sample, ident.1 = ID1, ident.2 = ID2, only.pos = FALSE, verbose = FALSE)
+  deg <- rownames_to_column(deg, "Gene_ID")
+  deg$comparison <- comp_name
+  deg$cluster <- cell
+
+  # Save full DEGs
+  write.xlsx(deg, file = file.path(markers_dir, paste0(comp_name, ".xlsx")), row.names = FALSE)
+  deg_list[[comp_name]] <- deg
+}
+
+# Combine all DEGs
+all_degs <- bind_rows(deg_list)
+
+# Find unique markers (appear in only 1 cluster comparison)
+unique_degs <- all_degs %>%
+  group_by(Gene_ID) %>%
+  filter(n() == 1) %>%
+  ungroup()
+
+# Save all unique DEGs 
+
+write.xlsx(all_degs, file = file.path(top5_dir, "All_Unique_Markers_by_Cluster_Group.xlsx"), row.names = FALSE)
+# Get top 5 per cluster (by log2FC)
+top5_unique <- unique_degs %>%
+  group_by(cluster) %>%
+  arrange(desc(avg_log2FC)) %>%
+  slice_head(n = 5) %>%
+  ungroup()
+
+# Save top 5 unique markers
+write.xlsx(top5_unique, file = file.path(top5_dir, "Top5_Unique_Markers_by_Cluster.xlsx"), row.names = FALSE)
+
+# Make DotPlot of only top 5 markers
+top_genes <- unique(top5_unique$Gene_ID)
+
+pdf(file.path(top5_dir, "Top5_Unique_Markers_DotPlot.pdf"), width = 12, height = 6)
+DotPlot(sample, features = top_genes, cols = c("grey90", "dodgerblue3"), dot.scale = 6) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ggtitle("Top 5 Unique Markers per Cluster (Inflamed vs Naive)")
+dev.off()
+
+
+
+
+### Adjusted p -value based filtering
+
+
+# Get top 5 per cluster based on lowest adjusted p-value
+top5_unique <- unique_degs %>%
+  group_by(cluster) %>%
+  arrange(p_val_adj) %>%
+  slice_head(n = 5) %>%
+  ungroup()
+
+# Save top 5 unique markers
+write.xlsx(top5_unique, file = file.path(top5_dir, "Top5_Unique_Markers_by_Cluster_group_p_val.xlsx"), row.names = FALSE)
+
+# Extract unique gene list
+top_genes <- unique(top5_unique$Gene_ID)
+
+# Plot dotplot of top 5 unique DEGs
+pdf(file.path(top5_dir, "Top5_Unique_Markers_DotPlot_P_val_adj.pdf"), width = 12, height = 6)
+DotPlot(sample, features = top_genes, cols = c("grey90", "dodgerblue3"), dot.scale = 6) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ggtitle("Top 5 Unique Markers per Cluster (Inflamed vs Naive) using adj_p_value")
+dev.off()
+
+
