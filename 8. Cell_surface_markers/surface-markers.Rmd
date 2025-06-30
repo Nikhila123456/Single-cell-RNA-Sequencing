@@ -1,0 +1,201 @@
+---
+title: "Identification of markers for possible isolation of subpopulations"
+author: "Nikhila"
+date: "5/9/2024"
+output:
+  html_document:
+    toc: true
+    highlight: kate
+    keep_md: yes
+---
+
+
+```{r knitr_init, echo=FALSE, cache=FALSE,include=TRUE}
+library(knitr)
+library(Seurat)
+library(Seurat)
+library(SeuratObject)
+#library(rmdformats)
+
+## Global options
+options(max.print="75")
+opts_chunk$set(echo=TRUE,
+	             cache=FALSE,
+               prompt=FALSE,
+               tidy=TRUE,
+               comment=NA,
+               message=TRUE,
+               warning=TRUE)
+opts_knit$set(width=75)
+```
+
+## Reading clustering object and markers identified using FindMarkers function
+
+```{r include=TRUE}
+
+#seurat object
+rm(list=ls())
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/3_velocity/Aire_Poet3/integration/Aire1_poet-3/filtering-out-c11/")
+sample<-readRDS("clustering-r6-pc27_SCT.rds")
+DefaultAssay(sample)<-"RNA"
+
+#first set: markers expressed by c9 and c11 (within)
+markers.RNA.c9<- read.csv("9_Inflamed_VS_9_Naive.csv",row.names=1)#[1] 7409    6
+markers.RNA.c9$cluster<-"9"
+dim(markers.RNA.c9) #[1] 7409    7
+
+markers.RNA.c11<- read.csv("11_Inflamed_VS_11_Naive.csv",row.names=1)#[1] 5813    6
+markers.RNA.c11$cluster<-"11"
+dim(markers.RNA.c11) #[1] [1] 5813    7
+
+markers.RNA1 <- rbind(markers.RNA.c9,markers.RNA.c11)  #[1] 13222     7
+
+
+#second set: markers expressed amongst by c9 and c11 (Filtered from FindAllMarkers)
+
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/3_velocity/Aire_Poet3/integration/Aire1_poet-3/filtering-out-c11/")
+markers.RNA2 <- read.csv("markers_amongst_c9_c11.csv",row.names=1)  
+dim(markers.RNA2) #[1] 8224    7
+
+kable(head(markers.RNA2))
+|            | p_val|avg_log2FC       | pct.1| pct.2| p_val_adj| cluster|gene      |
+|:-----------|-----:|:----------------|-----:|-----:|---------:|-------:|:---------|
+|Hist1h2ap.5 |     0|232.079466614874 | 0.903| 0.292|         0|       9|Hist1h2ap |
+|Tubb5.6     |     0|180.108755740121 | 0.958| 0.630|         0|       9|Tubb5     |
+
+
+rownames(markers.RNA2)
+markers.RNA2 <- markers.RNA2 %>% 
+  rownames_to_column(var = "Gene_ID")  # Convert row names to a column
+
+|Gene_ID     | p_val|avg_log2FC       | pct.1| pct.2| p_val_adj| cluster|gene      |
+|:-----------|-----:|:----------------|-----:|-----:|---------:|-------:|:---------|
+|Hist1h2ap.5 |     0|232.079466614874 | 0.903| 0.292|         0|       9|Hist1h2ap |
+|Tubb5.6     |     0|180.108755740121 | 0.958| 0.630|         0|       9|Tubb5     |
+
+
+
+```
+
+
+
+
+## Identification of membrane-localized markers.
+
+```{r include=TRUE}
+
+library(org.Mm.eg.db)
+
+
+
+#membrane_markers.RNA <- markers.RNA[is_gene_membrane(rownames(markers.RNA)),]
+#write.csv(membrane_markers.RNA,"membrane_RNAmarkers_method-1.csv")
+
+
+
+
+#try a different way
+
+library(biomaRt)
+
+ensembl = useMart("ensembl",dataset="mmusculus_gene_ensembl")
+
+
+# For first set
+annot1 <- getBM(attributes=c('ensembl_gene_id','mgi_symbol','go_id','name_1006'), filters='mgi_symbol', values=markers.RNA1$Gene_ID, mart=ensembl)
+deg_annot1 = merge(x = markers.RNA1, y = annot1, by.x="Gene_ID",by.y='mgi_symbol',all.x=TRUE)
+    
+membrane1 <- deg_annot1[deg_annot1$go_id %in% "GO:0005886",]
+unique.membrane1 <- unique(membrane1$Gene_ID)
+
+membrane.markers.RNA1 <- markers.RNA1[markers.RNA1$gene  %in% unique.membrane1,]
+
+
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/7_cellSurface-Markers/")
+write.csv(membrane.markers.RNA1,"Membrane-markers-within-C9-11-clusters-using-biomart-new.csv")
+
+kable(head(membrane.markers.RNA1))
+
+
+# For second set
+
+annot2 <- getBM(attributes=c('ensembl_gene_id','mgi_symbol','go_id','name_1006'), filters='mgi_symbol', values=markers.RNA2$Gene_ID, mart=ensembl)
+deg_annot2 = merge(x = markers.RNA2, y = annot2, by.x="Gene_ID",by.y='mgi_symbol',all.x=TRUE)
+    
+membrane2 <- deg_annot2[deg_annot2$go_id %in% "GO:0005886",]
+unique.membrane2 <- unique(membrane2$Gene_ID)
+membrane.markers.RNA2 <- markers.RNA2[markers.RNA2$Gene_ID  %in% unique.membrane2,]
+
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/7_cellSurface-Markers/")
+write.csv(membrane.markers.RNA2,"Membrane-markers-amongst-C9-11-clusters-using-biomart.csv")
+
+kable(head(membrane.markers.RNA2))
+
+```
+
+
+
+
+
+
+
+
+
+
+Plot the membrane markers in each cluster
+```{r include=TRUE}
+
+library(dplyr)
+
+
+
+plot.membrane.markers <- do.call(rbind,lapply(split(membrane.markers.RNA1,membrane.markers.RNA1$cluster),head,5))
+top1 <- plot.membrane.markers %>%
+      group_by(cluster) %>%
+      arrange(desc(p_val_adj)) %>%
+      slice_head(n = 1)
+      
+top1 <- plot.membrane.markers %>% group_by(cluster) %>% top_n(n = 10)
+
+##Nadia has asked violin plot for top 8 ranked by foldchange for C9- FindAllMArkers()
+
+
+markers_c9 <- membrane.markers.RNA2[membrane.markers.RNA2$cluster == "9", ]
+markers_c9 <- markers_c9[order(markers_c9$avg_log2FC, decreasing = TRUE), ]
+
+# Select the top 8 statistically significant markers
+top_markers_c9 <- head(markers_c9[markers_c9$p_val_adj < 0.05, ], 8)
+top_genes_c9 <- top_markers_c9$Gene_ID  # Adjust column name if different
+
+
+VlnPlot(sample, features = top_markers$Gene_ID)
+
+
+
+
+#Filter the markers for Cluster C9:
+membrane.markers.RNA2.c9 <- membrane.markers.RNA2[membrane.markers.RNA2$cluster == "9", ]
+
+
+#Sort the markers by fold-change:
+membrane.markers.RNA2.c9 <- membrane.markers.RNA2.c9[order(membrane.markers.RNA2.c9$avg_log2FC, decreasing = TRUE), ]
+
+#Select genes that are having p_val_adj<0.05
+top_markers <- head(membrane.markers.RNA2.c9[membrane.markers.RNA2.c9$p_val_adj< 0.05, ], 8)
+
+# Violin plot
+VlnPlot(seurat.temp, features = top_markers$Gene_ID)
+
+
+
+
+```
+```
+
+
+```{r membraneFeaturePlots, echo=FALSE, warning=FALSE, fig.align="center", fig.width=8, fig.height=30}
+FeaturePlot(seurat.temp,as.character(unique(top1$Gene_ID)),ncol=2)
+Vlnplot(seurat.temp,features=
+```
+
+

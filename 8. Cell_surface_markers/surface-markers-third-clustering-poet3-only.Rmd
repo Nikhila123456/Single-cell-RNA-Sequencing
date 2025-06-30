@@ -1,0 +1,299 @@
+---
+title: "Identification of markers for possible isolation of subpopulations"
+author: "Nikhila"
+date: "7/8/2024"
+output:
+  html_document:
+    toc: true
+    highlight: kate
+    keep_md: yes
+---
+
+
+```{r knitr_init, echo=FALSE, cache=FALSE,include=TRUE}
+library(knitr)
+library(Seurat)
+library(Seurat)
+library(SeuratObject)
+libarary(dplyr)
+#library(rmdformats)
+library(org.Mm.eg.db)
+library(biomaRt)
+
+
+## Global options
+options(max.print="75")
+opts_chunk$set(echo=TRUE,
+	             cache=FALSE,
+               prompt=FALSE,
+               tidy=TRUE,
+               comment=NA,
+               message=TRUE,
+               warning=TRUE)
+opts_knit$set(width=75)
+```
+
+## Reading clustering object and markers identified using FindMarkers function
+
+```{r include=TRUE}
+
+#Reading seurat object
+rm(list=ls())
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9/")
+sample<- readRDS("clustering-r5-pc21_SCT.rds")
+
+DefaultAssay(sample) <- "RNA"
+dim(sample)# [1] 23756 25765
+
+
+## Biomart db quering and annotation object generation
+
+ensembl = useMart("ensembl",dataset="mmusculus_gene_ensembl")
+
+
+
+###########################Cluster wise surface protein expression level within clusters-(0-9) ################################
+
+
+
+
+AllClus <- c(0,1,2,3,4,5,6,7,8,9)
+
+for (i in AllClus) {
+  setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9/DEG_cluster_comaprison/")
+  file_name <- paste0(i, "_Inflamed_VS_", i, "_Naive.csv")
+  # Read CSV file
+  markers.RNA<- read.csv(file_name, row.names = 1)
+  markers.RNA$cluster<-i
+  markers.RNA<-tibble::rownames_to_column(markers.RNA,"SYMBOL")
+  entrez_ids <- bitr(markers.RNA$SYMBOL, fromType = "SYMBOL", toType = c("ENTREZID", "ENSEMBL"), OrgDb = org.Mm.eg.db) 
+  markers.RNA<-merge(markers.RNA,entrez_ids,by=c("SYMBOL")) 
+  annot1 <- getBM(
+  attributes = c('ensembl_gene_id', 'mgi_symbol', 'go_id', 'name_1006'),
+  filters = 'ensembl_gene_id', 
+  values = markers.RNA$ENSEMBL,  # Ensure this matches your column name
+  mart = ensembl
+)
+names(annot1)<-c("ENSEMBL","SYMBOL","go_id","name_1006")
+deg_annot = merge(x = markers.RNA, y = annot1, by.x="ENSEMBL",by.y='ENSEMBL',all.x=TRUE)
+membrane <- deg_annot[deg_annot$go_id %in% "GO:0005886",]
+unique.membrane <- unique(membrane$SYMBOL.x)
+membrane.markers.RNA <- markers.RNA[markers.RNA$SYMBOL  %in% unique.membrane,]
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/7_cellSurface-Markers/Surface_markers_in_specific_clusters")
+
+write.csv(membrane.markers.RNA,file=file_name)
+
+#Plotting top 10 surface protein expression level in each cluster
+
+membrane.markers.RNA.top<- membrane.markers.RNA[order(membrane.markers.RNA$avg_log2FC, decreasing = TRUE), ]
+
+# Select the top 8 statistically significant markers
+top_markers <- head(membrane.markers.RNA.top[membrane.markers.RNA.top$p_val_adj < 0.05, ], 10)
+top_genes <- top_markers$SYMBOL 
+
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/7_cellSurface-Markers/Surface_markers_in_specific_clusters/violinplots")
+outname2 = paste0(outname,"_plot.pdf")
+pdf(outname2,  width = 10, height = 8)
+print(VlnPlot(sample, features = top_markers$SYMBOL))
+#VlnPlot(sample, features = top_markers$SYMBOL)
+dev.off()
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+############# Cluster by cluster
+
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9/DEG_cluster_comaprison/")
+
+
+#####Cluster-0: markers expressed by c0 (within)
+
+markers.RNA.c0<- read.csv("0_Inflamed_VS_0_Naive.csv",row.names=1)#[1]  2339    5
+
+markers.RNA.c0$cluster<-"0"
+dim(markers.RNA.c0) #[1] 2339    6
+markers.RNA.c0<-tibble::rownames_to_column(markers.RNA.c0,"SYMBOL")
+head(markers.RNA.c0,n=3)
+
+#SYMBOL p_val avg_log2FC pct.1 pct.2 p_val_adj cluster
+#1  Rpl31     0  1.0102779 0.997 0.968         0       0
+#2  Stat1     0  0.9586208 0.491 0.054         0       0
+#3 Rpl37a     0  1.0426485 1.000 0.999         0       0
+
+entrez_ids <- bitr(markers.RNA.c0$SYMBOL, fromType = "SYMBOL", toType = c("ENTREZID", "ENSEMBL"), OrgDb = org.Mm.eg.db)  
+#[1] 2290    2
+head(entrez_ids,n=3)
+ 
+#         SYMBOL ENTREZID            ENSEMBL
+#1 0610040J01Rik    76261 ENSMUSG00000060512
+#2 1110004F10Rik    56372 ENSMUSG00000030663
+#3 1110038B12Rik    68763 ENSMUSG00000092203
+
+
+markers.RNA.c0<-merge(markers.RNA.c0,entrez_ids,by=c("SYMBOL"))
+
+head(markers.RNA.c0,n=3)
+#         SYMBOL         p_val avg_log2FC pct.1 pct.2     p_val_adj cluster  ENTREZID  ENSEMBL
+1 0610040J01Rik  5.876150e-68  0.3449722 0.277 0.106  1.395938e-63       0   76261     ENSMUSG00000060512
+2 1110004F10Rik 1.436884e-254  0.8294913 0.786 0.465 3.413462e-250       0   56372     ENSMUSG00000030663
+3 1110038B12Rik  0.000000e+00  1.1336988 0.868 0.534  0.000000e+00       0   68763     ENSMUSG00000092203
+              
+
+   
+
+####### Identification of membrane-localized markers using biomart.
+
+```{r include=TRUE}
+
+
+library(org.Mm.eg.db)
+library(biomaRt)
+
+ensembl = useMart("ensembl",dataset="mmusculus_gene_ensembl")
+
+
+# For first cluster
+#annot1 <- getBM(attributes=c('ensembl_gene_id','mgi_symbol','go_id','name_1006'), filters='mgi_symbol', values=markers.RNA.c0$SYMBOL, mart=ensembl)
+
+annot1 <- getBM(
+  attributes = c('ensembl_gene_id', 'mgi_symbol', 'go_id', 'name_1006'),
+  filters = 'ensembl_gene_id', 
+  values = markers.RNA.c0$ENSEMBL,  # Ensure this matches your column name
+  mart = ensembl
+)
+dim(annot1)
+
+head(annot1,n=3)
+
+#ensembl_gene_id mgi_symbol      go_id           name_1006
+#1 ENSMUSG00000024331       Dsc2 GO:0016020            membrane
+#2 ENSMUSG00000024331       Dsc2 GO:0005886     plasma membrane
+#3 ENSMUSG00000024331       Dsc2 GO:0005509 calcium ion binding
+
+names(annot1)<-c("ENSEMBL","SYMBOL","go_id","name_1006")
+
+deg_annot0 = merge(x = markers.RNA.c0, y = annot1, by.x="ENSEMBL",by.y='ENSEMBL',all.x=TRUE)
+#by.x and by.y: These arguments specify which columns to merge on. Here, by.x = "ENSEMBL" indicates merging by the ENSEMBL column in markers.RNA.c0, and by.y = "SYMBOL" indicates merging by the SYMBOL column in annot1  
+dim(deg_annot0)[1] 56102    12
+
+head(deg_annot0,n=3)
+membrane0 <- deg_annot0[deg_annot0$go_id %in% "GO:0005886",]
+dim(membrane0) #554 12
+head(membarne0,n=3)
+#ENSEMBL SYMBOL.x        p_val avg_log2FC pct.1 pct.2
+#59  ENSMUSG00000000326     Comt 1.197755e-49  0.3303743 0.574 0.418
+#470 ENSMUSG00000000743   Chmp1a 1.018254e-53  0.2543988 0.270 0.120
+#522 ENSMUSG00000000826   Dnajc5 3.190443e-45  0.3939790 0.752 0.622
+#       p_val_adj cluster ENTREZID SYMBOL.y      go_id       name_1006
+#59  2.845386e-45       0    12846     Comt GO:0005886 plasma membrane
+#470 2.418964e-49       0   234852   Chmp1a GO:0005886 plasma membrane
+#522 7.579217e-41       0    13002   Dnajc5 GO:0005886 plasma membrane
+
+unique.membrane0 <- unique(membrane0$SYMBOL.x)
+
+membrane.markers.RNA.c0 <- markers.RNA.c0[markers.RNA.c0$SYMBOL  %in% unique.membrane0,]
+
+
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/7_cellSurface-Markers/")
+write.csv(membrane.markers.RNA.c0,"Membrane-markers-within-C0-cluster-using-biomart.csv")
+
+kable(head(membrane.markers.RNA.c0))
+|   |SYMBOL        | p_val| avg_log2FC| pct.1| pct.2| p_val_adj|cluster |ENTREZID |ENSEMBL            |
+|:--|:-------------|-----:|----------:|-----:|-----:|---------:|:-------|:--------|:------------------|
+|10 |2200002D01Rik |     0|  0.9678913| 0.537| 0.087|         0|0       |72275    |ENSMUSG00000030587 |
+|22 |Aak1          |     0|  0.3394420| 0.634| 0.485|         0|0       |269774   |ENSMUSG00000057230 |
+|24 |Abcc1         |     0|  0.4278019| 0.428| 0.257|         0|0       |17250    |ENSMUSG00000023088 |
+|25 |Abcc3         |     0|  0.2666908| 0.223| 0.074|         0|0       |76408    |ENSMUSG00000020865 |
+|37 |Acin1         |     0|  0.4130995| 0.745| 0.612|         0|0       |56215    |ENSMUSG00000022185 |
+|40 |Acsl4         |     0|  0.9461588| 0.869| 0.620|         0|0       |50790    |ENSMUSG00000031278 |
+
+
+
+# For second cluster
+
+#####Cluster-1: markers expressed by c0 (within)
+
+```
+
+
+
+
+
+
+
+
+
+
+Plot the membrane markers in each cluster
+```{r include=TRUE}
+
+library(dplyr)
+
+
+
+plot.membrane.markers <- do.call(rbind,lapply(split(membrane.markers.RNA1,membrane.markers.RNA1$cluster),head,5))
+top1 <- plot.membrane.markers %>%
+      group_by(cluster) %>%
+      arrange(desc(p_val_adj)) %>%
+      slice_head(n = 1)
+      
+top1 <- plot.membrane.markers %>% group_by(cluster) %>% top_n(n = 10)
+
+##Nadia has asked violin plot for top 8 ranked by foldchange for C9- FindAllMArkers()
+
+
+markers_c9 <- membrane.markers.RNA2[membrane.markers.RNA2$cluster == "9", ]
+markers_c9 <- markers_c9[order(markers_c9$avg_log2FC, decreasing = TRUE), ]
+
+# Select the top 8 statistically significant markers
+top_markers_c9 <- head(markers_c9[markers_c9$p_val_adj < 0.05, ], 8)
+top_genes_c9 <- top_markers_c9$Gene_ID  # Adjust column name if different
+
+
+VlnPlot(sample, features = top_markers$Gene_ID)
+
+
+
+
+#Filter the markers for Cluster C9:
+membrane.markers.RNA2.c9 <- membrane.markers.RNA2[membrane.markers.RNA2$cluster == "9", ]
+
+
+#Sort the markers by fold-change:
+membrane.markers.RNA2.c9 <- membrane.markers.RNA2.c9[order(membrane.markers.RNA2.c9$avg_log2FC, decreasing = TRUE), ]
+
+#Select genes that are having p_val_adj<0.05
+top_markers <- head(membrane.markers.RNA2.c9[membrane.markers.RNA2.c9$p_val_adj< 0.05, ], 8)
+
+# Violin plot
+VlnPlot(seurat.temp, features = top_markers$Gene_ID)
+
+
+
+
+```
+```
+
+
+```{r membraneFeaturePlots, echo=FALSE, warning=FALSE, fig.align="center", fig.width=8, fig.height=30}
+FeaturePlot(seurat.temp,as.character(unique(top1$Gene_ID)),ncol=2)
+Vlnplot(seurat.temp,features=
+```
+
+
