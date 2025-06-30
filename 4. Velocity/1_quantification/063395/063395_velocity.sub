@@ -1,0 +1,40 @@
+#!/bin/bash
+#SBATCH -A pccr
+#SBATCH -t 336:00:00
+#SBATCH -N 2
+#SBATCH -n 64
+#SBATCH --job-name=063395_velocity
+#SBATCH --mail-type=FAIL,BEGIN,END
+#SBATCH --error=%x-%J-%u.err
+#SBATCH --output=%x-%J-%u.out
+
+starts=$(date +"%s")
+start=$(date +"%r, %m-%d-%Y")
+
+ml --force purge 
+ml bioinfo  Velocyto  samtools
+
+
+repeats="/depot/tlratlif/data/LSC_scRNAseq_2023/3_velocity/1_quantification/mm10_rmsk.gtf"
+annotation="/depot/tlratlif/data/LSC_scRNAseq_2023/1_CellRanger/reference/refdata-gex-mm10-2020-A/genes/genes.gtf"
+barcodes="/depot/tlratlif/data/LSC_scRNAseq_2023/1_CellRanger/output/063395/outs/filtered_feature_bc_matrix/barcodes.tsv"
+bamfile="/depot/tlratlif/data/LSC_scRNAseq_2023/1_CellRanger/output/063395/outs/possorted_genome_bam.bam"
+outdir="/depot/tlratlif/data/LSC_scRNAseq_2023/3_velocity/1_quantification/velocyto/063395"
+
+velocyto run -b $barcodes -m $repeats $cellranger_output $bamfile $annotation -o $outdir
+
+
+ends=$(date +"%s")
+end=$(date +"%r, %m-%d-%Y")
+diff=$(($ends-$starts))
+hours=$(($diff / 3600))
+dif=$(($diff % 3600))
+minutes=$(($dif / 60))
+seconds=$(($dif % 60))
+printf "\n\t===========Time Stamp===========\n"
+printf "\tStart\t:$start\n\tEnd\t:$end\n\tTime\t:%02d:%02d:%02d\n" "$hours" "$minutes" "$seconds"
+printf "\t================================\n\n"
+
+sacct --jobs=$SLURM_JOBID --format=jobid,jobname,qos,nnodes,ncpu,maxrss,cputime,avecpu,elapsed
+
+
