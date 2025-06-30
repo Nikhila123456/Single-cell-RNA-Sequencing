@@ -1,0 +1,540 @@
+---
+title: "Third clsutering by excluding C9"
+author: "Nikhila"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+
+```{r library, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval=TRUE}
+
+library(Seurat)
+library(Seurat)
+library(dplyr)
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+library(ggthemes)
+library(ggplot2)
+library(cowplot)
+library(data.table)
+library(dplyr)
+library(RColorBrewer)
+library(glmGamPoi)
+library(clustree)
+library(ggraph)
+library(SingleR)
+library(presto) 
+library(msigdbr) 
+library(xlsx)
+library(Scillus)
+library(WriteXLS)
+library(data.table)
+library(magrittr)
+options(java.parameters = "-Xmx8000m")
+
+library(future)
+options(future.globals.maxSize = 990000*1024^2)
+
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9")
+
+```
+
+
+
+
+```{r load_data_and_subset, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, results="hide", eval=F}
+
+
+
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integarted-second-clustering/second")
+sample = readRDS(file = "clustering-r6-pc22_SCT.rds")
+DefaultAssay(sample) <- "RNA"
+all<-subset(x=sample,idents=c("0","1", "2", "3","4","5","6","7","8","10","11","12"))
+
+
+```
+
+
+
+```{r sct, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval = F}
+
+
+sample_list <- SplitObject(all, split.by = "new.ident")
+names(sample_list) = c("Naiv1.1", "Naiv1.2", "Naiv2.1", "Naiv2.2", "Naiv3", "Inf1.1", "Inf2.1", "Inf2.2", "Inf3.1", "Inf3.2")
+sample_list
+sample_list <- lapply(X = sample_list, FUN = SCTransform)
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9")
+#saveRDS(sample_list, file = "merged_sample_list1.rds")
+features <- SelectIntegrationFeatures(object.list = sample_list,nfeatures = 3000)
+sample_list <- PrepSCTIntegration(object.list = sample_list, anchor.features = features)
+anchors <- FindIntegrationAnchors(object.list = sample_list , normalization.method = "SCT",anchor.features = features)
+saveRDS(anchors, file = "anchors.rds")
+
+
+```
+
+
+
+```{r integration_using_anchors2, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval = F}
+
+rm(list=ls())
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9")
+anchors = readRDS(file = "anchors.rds" )
+combined.sct <- IntegrateData(anchorset = anchors, normalization.method = "SCT")
+
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9")
+saveRDS(combined.sct, file = "combined_sct_nokweight.rds")
+
+
+```
+```{r pca_50, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval = F}
+rm(list=ls())
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9")
+sample = readRDS(file = "combined_sct_nokweight.rds" )
+##combined.sct <- ScaleData(combined.sct, verbose = FALSE)
+sample <- RunPCA(sample, verbose = FALSE)
+sample <- RunUMAP(sample, reduction = "pca", dims = 1:50)
+sample <- FindNeighbors(sample, dims = 1:50)
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9")
+saveRDS(sample, file = "pca50-umap.rds")
+
+```
+
+
+## Elbowplot
+Identifying the true dimensionality of a dataset and the most significant PC can be challenging/uncertain. Elbowplot method generates a ranking of principle components based on the percentage of variance explained by each one. 
+In this example, we can observe an **elbow** (i.e. beginning of the straight line) somewhere between PC 20-25, suggesting that the majority of true signal is captured in the first 21 PCs.
+
+```{r Elbowplot_50, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, results="hide", eval = F, fig.width = 6, fig.height = 4}
+
+
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9")
+
+name = "pca50"
+outname = paste0(name,"-umap.rds")
+sample = readRDS(file = outname )
+
+p = 50
+
+title = paste0("nPCs = ", p) 
+
+ElbowPlot(sample, ndims = 50)
+
+
+```
+
+
+
+
+```{r pca_21, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval = F}
+rm(list=ls())
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9")
+sample = readRDS(file = "combined_sct_nokweight.rds" )
+sample <- RunPCA(sample, verbose = FALSE)
+sample <- RunUMAP(sample, reduction = "pca", dims = 1:21)
+sample <- FindNeighbors(sample, dims = 1:21)
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9")
+saveRDS(sample, file = "pca21-umap.rds")
+
+#dev.off()
+```
+
+
+
+```{r cluster_by_parameter, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, results="hide", eval = F}
+
+rm(list=ls())
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9")
+
+sample = readRDS(file = "pca21-umap.rds")
+
+res = seq(0.1, 1, by = 0.1)
+
+name = "integrated_third-clustering-1"
+outname = paste0(name,"_SCT.pdf")
+
+pdf(outname,  width = 10, height = 8)
+
+for (r in as.numeric(res)) {
+    
+    my_cluster <- FindClusters(sample, resolution = r)
+
+   title = paste0(" resolution = ", r)
+   print(DimPlot(my_cluster, reduction = "umap", label = TRUE, label.size = 6) + ggtitle(title))
+
+}
+
+```
+
+## Third clustering
+```{r final_clustering, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, results="hide", fig.width= 8, fig.height=6, eval = F}
+
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9")
+
+sample = readRDS(file = "pca21-umap.rds")
+
+p = 21
+r = 0.5
+
+sample <- RunPCA(sample, verbose = FALSE)
+sample <- RunUMAP(sample, dims = 1:p)
+sample <- FindNeighbors(sample, dims = 1:p)
+
+sample<- FindClusters(sample, resolution = r)
+
+name = "clustering-r5-pc21"
+outname = paste0(name,"_SCT.rds")
+saveRDS(sample, file = outname )
+
+```
+
+
+```{r Dimplot_default, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval = T, fig.width= 20, fig.height=8}
+
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9")
+
+sample = readRDS(file = "clustering-r5-pc21_SCT.rds")
+sample$expt.type <- factor(x =sample$expt.type , levels = c("Naive", "Inflamed"))
+
+p = 21
+r = 0.5
+#sample <- AddMetaData(sample,metadata=meta$type,col.name="sample.Type")
+#meta$ident.type <- paste0(meta$orig.ident,"_",meta$sample.Type)
+
+title = paste0("Integrating Naive and Inflamed samples: nPCs = ", p,"resolution = ", r) 
+DimPlot(sample , reduction = "umap", label = TRUE, label.size = 6) + ggtitle(title)
+title = paste0("Naive and Inflamed samples sepeartely: nPCs = ", p," resolution = ", r) 
+DimPlot(sample , reduction = "umap", label = TRUE, split.by = "expt.type", label.size = 6) + ggtitle("Sample wise split")
+
+```
+
+
+## Cell count and contribution of each cluster in naive and inflamed population
+
+```{r cell_count, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval = T, fig.width= 20, fig.height=8}
+sample$expt.type <- factor(x =sample$expt.type , levels = c("Naive", "Inflamed"))
+df<-data.frame(table(Idents(sample)))
+names(df)<-c("Cluster_id","Cell_count")
+ggplot(df, aes(x=as.character(Cluster_id), y=Cell_count))+geom_bar(stat="identity")+xlab("Cluster_ID")+ggtitle("Cell count in C0-C9")
+
+table(sample@meta.data$seurat_clusters)
+md <- sample@meta.data %>% as.data.table
+#md[, .N, by = c("seurat_clusters")]
+ggplot(sample@meta.data, aes(seurat_clusters, fill=expt.type))+geom_bar(stat="count")+ggtitle("Cluster wise cell contribution in naive and inflamed condition ")
+
+#+scale_fill_manual("Legend", values = c("Naive" #= "pale green", "Inflamed" = "maroon"))
+md[, .N, by = c("expt.type","seurat_clusters")] %>% dcast(., expt.type ~ seurat_clusters, value.var = "N")
+
+print("Naive-cell count")
+naive<-sum(sample$expt.type == "Naive")
+naive
+print("Inflamed-cell count")
+inflamed<-sum(sample$expt.type == "Inflamed")
+inflamed
+
+
+df2 <- structure(c(2738, 1410, 866, 771, 1251, 714,66,147,146,48, 4545, 3000,2469, 2273, 1711, 1517,1536,233,135,189), .Dim = c(10L, 2L), .Dimnames = structure(list(c("0", "1", "2", "3", "4", "5","6","7","8","9"), c("Naive", "Inflamed")),.Names = c("","")), class = "table")
+
+df2<-data.frame(df2)
+#names(df2)
+names(df2)<-c("Cluster_ID","Condition","Count")
+DF <- df2 %>% group_by(Condition) %>% mutate(Percent = ifelse(Condition=="Naive", Count / 8157*100, Count / 17608*100))
+  
+
+ggplot(DF, aes(x = Condition, y = Count, fill = Cluster_ID))+geom_bar(stat = "identity")+geom_text(aes(label = paste(Count,"")), position = position_stack(vjust =  0.5))+ggtitle("Cell counts in naive and inflamed clusters")
+
+
+ggplot(DF, aes(x = Condition, y = Percent, fill = Cluster_ID))+geom_bar(stat = "identity")+geom_text(aes(label = paste(round(Percent,2),"%")), position = position_stack(vjust =  0.5))+ggtitle("Percentage of contribution from each cluster in naive and inflamed condition")
+
+DF
+
+```
+
+
+
+### DEG identification
+
+```{r Find_all_markers, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval = F}
+
+rm(list = ls())
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9")
+sample = readRDS(file = "clustering-r5-pc21_SCT.rds")
+DefaultAssay(sample) <- "RNA"
+
+Idents(sample) <- "seurat_clusters"
+markers <- FindAllMarkers(sample, only.pos = FALSE, min.pct = 0.25, logfc.threshold = 0.25)
+
+name = "all-r5-pc21"
+outname = paste0(name,"_markers.rds")
+saveRDS(markers, file = outname)
+
+outname = paste0(name,"_markers.csv")
+write.csv(markers, file = outname, row.names = F)
+
+write.xlsx(markers, "/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9/All-r5-pc-21_markers.xlsx", sheetName = "Sheet1", col.names = TRUE, row.names = TRUE)
+
+```
+
+
+```{r FindMarker_by_treatment_pairs, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval = T}
+
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9")
+sample = readRDS(file = "clustering-r5-pc21_SCT.rds")
+
+DefaultAssay(sample) <- "RNA"
+Idents(sample) <- "expt.type"
+
+
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9")
+
+x = FindMarkers(sample, ident.1 = "Inflamed", ident.2 = "Naive", verbose = FALSE)
+x = rownames_to_column(x, "Gene_ID")
+name = "Naive_vs_Inflamed"
+outname = paste0(name,"_markers.txt")
+write.table(x, file = outname, sep = "\t", quote = F, row.names = F)
+
+
+```
+
+
+
+```{r FindMarker_by_clust_treatment2, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, eval = F}
+rm(list = ls())
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9")
+sample = readRDS(file = "clustering-r5-pc21_SCT.rds")
+DefaultAssay(sample) <- "RNA"
+
+sample$cluster.treat <- paste(sample$seurat_clusters, sample$expt.type,  sep = "_")
+my_order = sort(unique(sample$cluster.treat))
+Idents(sample) <- factor(sample$cluster.treat, levels = my_order)
+
+
+treatment = sort(unique(sample@meta.data$expt.type))
+
+cluster =  sort(unique(sample@meta.data$seurat_clusters))
+
+cell_counts = table(sample@meta.data$cluster.treat)
+#Idents(sample)<-"cluster.treat"
+
+for (cell in sort(unique(sample@meta.data$seurat_clusters))) {
+    
+
+      for(i in 1:1) {
+  ID1 = paste(cell, treatment[1], sep = "_")
+    ID2 = paste(cell, treatment[2], sep = "_")
+    comp_name = paste0(ID1, "_VS_", ID2)
+     print(comp_name)
+     sheetname<-comp_name
+      
+    if(ID1 %in% names(cell_counts) == FALSE)  {next}
+    if(ID2 %in% names(cell_counts) == FALSE)  {next}
+      #
+     if(cell_counts[ID1] < 20) {next}
+    if(cell_counts[ID2] < 20 ) {next}
+      
+      x = FindMarkers(sample, ident.1 = ID1,ident.2 = ID2, only.pos = FALSE, verbose = FALSE)
+      x = rownames_to_column(x, "Gene_ID")
+    outname = paste0(comp_name,".xlsx")
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9/DEG_cluster_comaprison")
+      write.xlsx(x, file = outname, row.names = F)
+#write.xlsx(x,"/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integarted-second-clustering/second/#Multiple_sheets.xlsx",sheetName=sheetname,col.names = TRUE,showNA=TRUE,append=TRUE)
+
+
+#sheets <- list("sheet1Name" = sheet1, "sheet2Name" = sheet2) #assume sheet1 and sheet2 are data frames
+#write_xlsx(x, "")
+
+     }
+
+}
+
+
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9")
+name = "Cluster-r5-pc21"
+outname = paste0(name,"_markers.rds")
+saveRDS(sample, file = outname)
+```
+
+
+## Heat map of top 10 differentially expressed genes
+Here, Inflamed is the treatment group and Naive is taken as the control group.Comaprison starts with C0 cells in Inflamed with C0-C9 cells in Naive and ends with C9 cells in Inflamed with C0-C9 cells in Naive. Top and bottom 10 values are selected based on the absolute values of p_val_adj and avg_log2FC.
+```{r heatmap, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, fig.width=12, fig.height=12, results='asis', eval = T}
+
+rm(list=ls())
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9")
+name = "all-r5-pc21"
+outname1 = paste0(name,"_markers.rds")
+markers = readRDS(file = outname1)
+sample = readRDS(file = "clustering-r5-pc21_SCT.rds")
+DefaultAssay(sample)<-"RNA"
+PT.rh <- ScaleData(sample, verbose = TRUE)
+
+
+#markers %>% arrange(desc(abs(p_val_adj)),desc(abs(avg_log2FC))) %>%
+#    mutate(rank=abs(!duplicated(.))) %>% filter(rank<=10)%>% head(10) -> top10
+#f1 <-filter(markers, abs(p_val_adj) < 0.05)    
+f1<-filter(markers, abs(p_val_adj) < 0.05)    
+
+f1 %>% arrange(desc(avg_log2FC)) %>% head(10) -> top10
+#setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9")
+#png(file="Top10_Naiv-vs-Infl-r6-pc-27.png"  ,units = "in", width = 12, height = 15, bg = "white", pointsize = 1, res=100)
+
+f1 %>% arrange(desc(avg_log2FC)) %>% tail(10) -> down10
+PT.rh$expt.type <- factor(x = PT.rh$expt.type , levels = c("Naive", "Inflamed"))
+DoHeatmap(subset(PT.rh, downsample = 2500), 
+          group.by = "expt.type",
+          group.bar = TRUE,
+          raster = TRUE,
+          draw.lines = TRUE,
+          lines.width = NULL,
+          group.bar.height = 0.02,
+          features = c(top10$gene,down10$gene),
+          disp.min = -2.5, disp.max = 2.5)
+#setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9")
+#png(file="Top10_Naiv-vs-Infl-r6-pc-27-mulit-bar.png"  ,units = "in", width = 12, height = 15, bg = "white", pointsize = 1, res=100)
+plot_heatmap(subset(PT.rh,downsample = 2500), 
+             markers = c(top10$gene,down10$gene),
+             sort_var = c("seurat_clusters","expt.type"),
+             anno_var = c("seurat_clusters","expt.type"),
+             anno_colors = list("Set2",                                             # RColorBrewer palette
+                                c("red","orange","yellow","purple","blue","green"), # color vector
+                               "Reds",
+				hm_limit = c(-1,0,1),
+            			hm_colors = c("purple","black","yellow")))
+#dev.off()
+```  
+
+## Clustree
+Clustering is a core tool for analysing single-cell RNA-sequencing (scRNA-seq) datasets. The clustering is primarily controlled by two parameters, number of principle components and then resolution.
+A clustering tree visualises the relationships between at a range of resolutions.
+
+```{r clustree, warning=FALSE, message=FALSE, echo=FALSE, tidy=TRUE, results="hide", fig.width=30, fig.height=30, eval = F}
+
+setwd("/depot/tlratlif/data/LSC_scRNAseq_2023/2_Seurat/Integrate/Combined/Separate/comparison-c9-Vs-all-find-markers/integrated_second-clustering_excluding-c9")
+
+
+rm(list = ls())
+name = "clustering-r5-pc21"
+outname = paste0(name,"_SCT.rds")
+fortree = readRDS(file = outname )
+
+res.vec <- seq(0,1, by = 0.1)
+
+for (r in res.vec){
+  fortree <- FindClusters(
+    fortree , 
+    resolution = r)
+}
+
+name = "integrated"
+outname = paste0(name,"_clustree.png")
+
+png(file=outname  ,units = "in", width = 12, height = 10, bg = "white", pointsize = 1, res=300)
+
+clustree(fortree, assay="integrated", prefix="integrated_snn_res.")
+
+#dev.off()
+
+```
+
+
+
+> sessionInfo()
+R version 4.2.3 (2023-03-15)
+Platform: x86_64-pc-linux-gnu (64-bit)
+Running under: Ubuntu 20.04.5 LTS
+
+Matrix products: default
+BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3
+LAPACK: /usr/lib/x86_64-linux-gnu/openblas-pthread/liblapack.so.3
+
+locale:
+[1] C
+
+attached base packages:
+[1] stats4    stats     graphics  grDevices utils     datasets  methods  
+[8] base     
+
+other attached packages:
+ [1] future.apply_1.11.0         future_1.33.0              
+ [3] xlsx_0.6.5                  SingleR_2.0.0              
+ [5] SummarizedExperiment_1.28.0 Biobase_2.58.0             
+ [7] GenomicRanges_1.50.2        GenomeInfoDb_1.34.9        
+ [9] IRanges_2.32.0              S4Vectors_0.36.2           
+[11] BiocGenerics_0.44.0         MatrixGenerics_1.10.0      
+[13] matrixStats_1.0.0           clustree_0.5.0             
+[15] ggraph_2.1.0                glmGamPoi_1.10.2           
+[17] RColorBrewer_1.1-3          data.table_1.14.8          
+[19] cowplot_1.1.1               ggthemes_4.2.4             
+[21] kableExtra_1.3.4            knitr_1.44                 
+[23] lubridate_1.9.2             forcats_1.0.0              
+[25] stringr_1.5.0               purrr_1.0.2                
+[27] readr_2.1.4                 tidyr_1.3.0                
+[29] tibble_3.2.1                ggplot2_3.4.3              
+[31] tidyverse_2.0.0             dplyr_1.1.3                
+[33] SeuratObject_4.1.3          Seurat_4.3.0.1             
+
+loaded via a namespace (and not attached):
+  [1] backports_1.4.1           systemfonts_1.0.4        
+  [3] plyr_1.8.8                igraph_1.5.1             
+  [5] lazyeval_0.2.2            sp_2.0-0                 
+  [7] splines_4.2.3             BiocParallel_1.32.6      
+  [9] listenv_0.9.0             scattermore_1.2          
+ [11] digest_0.6.33             htmltools_0.5.6          
+ [13] viridis_0.6.2             fansi_1.0.4              
+ [15] checkmate_2.1.0           magrittr_2.0.3           
+ [17] ScaledMatrix_1.6.0        tensor_1.5               
+ [19] cluster_2.1.4             ROCR_1.0-11              
+ [21] tzdb_0.3.0                graphlayouts_0.8.4       
+ [23] globals_0.16.2            svglite_2.1.1            
+ [25] timechange_0.2.0          spatstat.sparse_3.0-2    
+ [27] colorspace_2.1-0          rvest_1.0.3              
+ [29] ggrepel_0.9.3             xfun_0.40                
+ [31] RCurl_1.98-1.10           jsonlite_1.8.7           
+ [33] progressr_0.14.0          spatstat.data_3.0-1      
+ [35] survival_3.5-5            zoo_1.8-12               
+ [37] glue_1.6.2                polyclip_1.10-4          
+ [39] gtable_0.3.4              zlibbioc_1.44.0          
+ [41] XVector_0.38.0            webshot_0.5.4            
+ [43] leiden_0.4.3              DelayedArray_0.24.0      
+ [45] BiocSingular_1.14.0       abind_1.4-5              
+ [47] scales_1.2.1              spatstat.random_3.1-6    
+ [49] miniUI_0.1.1.1            Rcpp_1.0.11              
+ [51] viridisLite_0.4.2         xtable_1.8-4             
+ [53] reticulate_1.32.0         rsvd_1.0.5               
+ [55] htmlwidgets_1.6.2         httr_1.4.7               
+ [57] ellipsis_0.3.2            ica_1.0-3                
+ [59] rJava_1.0-6               farver_2.1.1             
+ [61] pkgconfig_2.0.3           uwot_0.1.16              
+ [63] deldir_1.0-9              utf8_1.2.3               
+ [65] labeling_0.4.3            tidyselect_1.2.0         
+ [67] rlang_1.1.1               reshape2_1.4.4           
+ [69] later_1.3.1               munsell_0.5.0            
+ [71] tools_4.2.3               cli_3.6.1                
+ [73] generics_0.1.3            ggridges_0.5.4           
+ [75] evaluate_0.21             fastmap_1.1.1            
+ [77] goftest_1.2-3             fitdistrplus_1.1-11      
+ [79] tidygraph_1.2.3           RANN_2.6.1               
+ [81] sparseMatrixStats_1.10.0  pbapply_1.7-2            
+ [83] nlme_3.1-162              mime_0.12                
+ [85] xml2_1.3.3                compiler_4.2.3           
+ [87] rstudioapi_0.14           plotly_4.10.2            
+ [89] png_0.1-8                 spatstat.utils_3.0-3     
+ [91] tweenr_2.0.2              stringi_1.7.12           
+ [93] lattice_0.20-45           Matrix_1.5-1             
+ [95] vctrs_0.6.3               pillar_1.9.0             
+ [97] lifecycle_1.0.3           spatstat.geom_3.2-5      
+ [99] lmtest_0.9-40             RcppAnnoy_0.0.21         
+[101] bitops_1.0-7              irlba_2.3.5.1            
+[103] httpuv_1.6.11             patchwork_1.1.3          
+[105] R6_2.5.1                  promises_1.2.1           
+[107] KernSmooth_2.23-20        gridExtra_2.3            
+[109] parallelly_1.36.0         codetools_0.2-19         
+[111] MASS_7.3-58.3             xlsxjars_0.6.1           
+[113] withr_2.5.0               sctransform_0.3.5        
+[115] GenomeInfoDbData_1.2.9    parallel_4.2.3           
+[117] hms_1.1.3                 beachmat_2.14.0          
+[119] grid_4.2.3                DelayedMatrixStats_1.20.0
+[121] rmarkdown_2.24            Rtsne_0.16               
+[123] spatstat.explore_3.2-3    ggforce_0.4.1            
+[125] shiny_1.7.5
